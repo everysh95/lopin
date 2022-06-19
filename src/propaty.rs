@@ -1,9 +1,12 @@
-use crate::core::Converter;
+use crate::core::{Store, Converter};
 use std::any::Any;
+use std::fmt;
+use std::ops::ShlAssign;
 
 pub trait PropatyValue {
     fn clone_box(&self) -> Box<dyn PropatyValue>;
     fn get(&self) -> Box<dyn Any>;
+    fn eq_value(&self,rhs: &Box<dyn Any>) -> bool;
 }
 
 pub struct Propaty<KeyType> {
@@ -20,12 +23,31 @@ impl<KeyType : 'static + Clone> Clone for Propaty<KeyType> {
     }
 }
 
-impl<T: 'static + Clone + Any> PropatyValue for T {
+impl<KeyType : 'static + Clone + fmt::Debug> fmt::Debug for Propaty<KeyType> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Propaty")
+         .field("key", &self.key)
+         .finish()
+    }
+}
+impl<KeyType: 'static + Clone + PartialEq> PartialEq for Propaty<KeyType> {
+    fn eq(&self, rhs: &Propaty<KeyType>) -> bool{
+        self.key.clone() == rhs.key.clone() && self.value.eq_value(&rhs.get())
+    }
+}
+
+impl<T: 'static + Clone + PartialEq + Any> PropatyValue for T {
     fn clone_box(&self) -> Box<dyn PropatyValue> {
         Box::new(self.clone())
     }
     fn get(&self) -> Box<dyn Any> {
         Box::new(self.clone())
+    }
+    fn eq_value(&self,rhs: &Box<dyn Any>) -> bool {
+        match rhs.downcast_ref::<T>() {
+            Some(rv) => rv == self,
+            None => false
+        }
     }
 }
 
@@ -41,11 +63,37 @@ impl<KeyType : 'static + Clone> Propaty<KeyType> {
     }
 }
 
+
+impl<KeyType : 'static + PartialEq + Clone> ShlAssign<& mut Store<Vec<Propaty<KeyType>>>> for Vec<Propaty<KeyType>> {
+
+    fn shl_assign(& mut self, rhs: & mut Store<Vec<Propaty<KeyType>>>) {
+        if let Some(value) = rhs.get() {
+            for v in value.iter() {
+                match self.iter().position(|p| p.key == v.key) {
+                    Some(pos) => {
+                        self[pos] = v.clone();
+                    },
+                    None => {
+                        self.push(v.clone());
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn create_propaty<KeyType : 'static + PartialEq + Clone>(store :& mut Store<Vec<Propaty<KeyType>>>) -> Vec<Propaty<KeyType>> {
+    match store.get() {
+        Some(v) => v,
+        None => vec![]
+    }
+}
+
 pub struct Named {
     name: String
 }
 
-impl<T: 'static + Clone + Any> Converter<T,Propaty<String>> for Named {
+impl<T: 'static + Clone + PartialEq + Any> Converter<T,Propaty<String>> for Named {
     fn to(&self,src: T) -> Option<Propaty<String>> {
         Some(Propaty {
             key: self.name.clone(),
@@ -81,7 +129,7 @@ pub fn get_value(name: &str) -> Box<GetValue> {
     })
 }
 
-impl<T: 'static + Clone + Any> Converter<Vec<Propaty<String>>,T> for GetValue {
+impl<T: 'static + Clone + PartialEq + Any> Converter<Vec<Propaty<String>>,T> for GetValue {
     fn to(&self,src: Vec<Propaty<String>>) -> Option<T> {
         match src.iter().find(|p| p.key == self.name) {
             Some(v) => match v.get().downcast_ref::<T>() {

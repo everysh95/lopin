@@ -1,4 +1,3 @@
-use std::ops::BitAnd;
 use std::ops::BitXor;
 
 pub struct Store<T: Clone> {
@@ -25,39 +24,6 @@ pub trait RawStore<T: Clone> {
     fn put(&mut self, value: &T);
 }
 
-pub type Condition<T> = Box<dyn Fn(&T) -> bool>;
-
-struct Select<T: Clone> {
-    store: Store<T>,
-    condition: Condition<T>,
-}
-
-impl<T: Clone> RawStore<T> for Select<T> {
-    fn get(&mut self) -> Option<T> {
-        let condition = &self.condition;
-        let value = self.store.get();
-        match value {
-            Some(v) => if condition(&v) {Some(v)} else {None},
-            None => None
-        }
-    }
-    fn put(&mut self, value: &T) {
-        let condition = &self.condition;
-        if condition(value) {
-            self.store.put(value);
-        }
-    }
-}
-
-impl<T: Clone + 'static> BitAnd<Condition<T>> for Store<T> {
-    type Output = Store<T>;
-    fn bitand(self, rhs: Condition<T>) -> Self::Output {
-        return Store::new(Box::new(Select {
-            store: self,
-            condition: rhs,
-        }));
-    }
-}
 
 
 pub trait Converter<ST, DT> {

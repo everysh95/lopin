@@ -20,7 +20,7 @@ impl<KeyType: 'static + Clone + PartialEq> RawStore<Vec<Propaty<KeyType>>> for M
             result.push(v);
         }
         if let Some(v) = value2 {
-            self.key1 = Some(v.key.clone());
+            self.key2 = Some(v.key.clone());
             result.push(v);
         }
         if result.is_empty() {
