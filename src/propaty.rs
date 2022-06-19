@@ -82,8 +82,9 @@ impl<KeyType : 'static + PartialEq + Clone> ShlAssign<& mut Store<Vec<Propaty<Ke
     }
 }
 
-pub fn create_propaty<KeyType : 'static + PartialEq + Clone>(store :& mut Store<Vec<Propaty<KeyType>>>) -> Vec<Propaty<KeyType>> {
-    match store.get() {
+pub fn create_propaty<KeyType : 'static + PartialEq + Clone>(store : Store<Vec<Propaty<KeyType>>>) -> Vec<Propaty<KeyType>> {
+    let mut store_ref = store;
+    match store_ref.get() {
         Some(v) => v,
         None => vec![]
     }

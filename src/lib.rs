@@ -28,7 +28,7 @@ mod tests {
     }
     #[test]
     fn it_prop() {
-        let prop = create_propaty(& mut (store(10) ^ named("num") | store("text".to_string()) ^ named("text")));
+        let prop = create_propaty(store(10) ^ named("num") | store("text".to_string()) ^ named("text"));
         let mut pipe = store(prop.clone()) ^ named("from") | assert_eq_store(prop.clone(), vec![]) ^ named("to");
         pipe <<= transport("from", "to");
     }
