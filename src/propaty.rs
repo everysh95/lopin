@@ -36,6 +36,15 @@ impl<KeyType: 'static + Clone + PartialEq> PartialEq for Propaty<KeyType> {
     }
 }
 
+impl<KeyType: 'static + Clone + PartialEq> Propaty<KeyType> {
+    pub fn new<T: 'static + Clone + PartialEq + Any>(key: KeyType,value: T) -> Propaty<KeyType> {
+        Propaty {
+            key: key.clone(),
+            value: Box::new(value)
+        }
+    }
+}
+
 impl<T: 'static + Clone + PartialEq + Any> PropatyValue for T {
     fn clone_box(&self) -> Box<dyn PropatyValue> {
         Box::new(self.clone())
@@ -132,13 +141,7 @@ pub fn get_value(name: &str) -> Box<GetValue> {
 
 impl<T: 'static + Clone + PartialEq + Any> Converter<Vec<Propaty<String>>,T> for GetValue {
     fn to(&self,src: Vec<Propaty<String>>) -> Option<T> {
-        match src.iter().find(|p| p.key == self.name) {
-            Some(v) => match v.get().downcast_ref::<T>() {
-                Some(v) => Some(v.clone()),
-                None => None
-            },
-            None => None
-        }
+        src.get_value(&self.name)
     }
     fn from(&self,dist:T) -> Option<Vec<Propaty<String>>> {
         Some(vec![Propaty {
@@ -148,3 +151,19 @@ impl<T: 'static + Clone + PartialEq + Any> Converter<Vec<Propaty<String>>,T> for
     }
 }
 
+pub trait PropatyMap<KeyType> {
+    fn get_value<T : 'static + Clone>(&self, key: &KeyType) -> Option<T>;
+}
+
+impl<KeyType : 'static + PartialEq + Clone> PropatyMap<KeyType> for Vec<Propaty<KeyType>> {
+    fn get_value<T : 'static + Clone>(&self, key: &KeyType) -> Option<T> {
+        match self.iter().find(|p| p.key == key.clone()) {
+            Some(v) => match v.get().downcast_ref::<T>() {
+                Some(v) => Some(v.clone()),
+                None => None
+            },
+            None => None
+        }
+
+    }
+}

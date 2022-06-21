@@ -1,9 +1,12 @@
+// main module
 pub mod core;
 pub mod propaty;
 pub mod merge;
 pub mod transport;
 pub mod select;
+// addional module
 pub mod test;
+pub mod http;
 pub use crate::core::*;
 pub use crate::propaty::*;
 pub use crate::merge::*;

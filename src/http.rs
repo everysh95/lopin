@@ -1,6 +1,4 @@
-use core::RawStore;
+pub mod util;
+pub mod server;
 
-struct HttpStore {
-    url: String;
-}
-
+pub use server::HttpTransporter;
