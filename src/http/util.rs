@@ -1,34 +1,42 @@
-use crate::{Converter, Propaty, PropatyMap};
+use crate::{Converter};
 use hyper::body::Bytes;
 
-pub struct Utf8Text {
-    key: String
-}
+pub struct FromUtf8 { }
 
-impl Converter<Vec<Propaty<String>>,Vec<Propaty<String>>> for Utf8Text {
-    fn to(&self,src:Vec<Propaty<String>>) -> Option<Vec<Propaty<String>>> {
-        let mut res = src.clone();
-        if let Some(index) = src.iter().position(|p| p.key == self.key) {
-            if let Some(value) = src.get_value::<String>(&self.key) {
-                res[index] = Propaty::new(self.key.clone(), Bytes::from(value));
-            }
-        }
-        Some(res)
+impl Converter<String,Bytes> for FromUtf8 {
+    fn to(&self,src:String) -> Option<Bytes> {
+        Some(Bytes::from(src.clone()))
     }
-    fn from(&self,dist:Vec<Propaty<String>>) -> Option<Vec<Propaty<String>>> {
-        let mut res = dist.clone();
-        if let Some(index) = dist.iter().position(|p| p.key == self.key) {
-            if let Some(value) = dist.get_value::<Bytes>(&self.key) {
-                res[index] = Propaty::new(self.key.clone(), String::from_utf8(value.to_vec()));
-            }
+    fn from(&self,dist:Bytes) -> Option<String> {
+        if let Ok(res) = String::from_utf8(dist.to_vec()) {
+            Some(res)
+        } else {
+            None
         }
-        Some(res)
     }
 
 }
 
-pub fn utf8_text(key: &str) -> Box<dyn Converter<Vec<Propaty<String>>,Vec<Propaty<String>>>> {
-    Box::new(Utf8Text {
-        key: key.to_string()
-    })
+pub fn from_utf8() -> Box<dyn Converter<String,Bytes>> {
+    Box::new(FromUtf8 { })
+}
+
+pub struct ToUtf8 { }
+
+impl Converter<Bytes, String> for ToUtf8 {
+    fn to(&self,src:Bytes) -> Option<String> {
+        if let Ok(res) = String::from_utf8(src.to_vec()) {
+            Some(res)
+        } else {
+            None
+        }
+    }
+    fn from(&self,dist:String) -> Option<Bytes> {
+        Some(Bytes::from(dist.clone()))
+    }
+
+}
+
+pub fn to_utf8() -> Box<dyn Converter<Bytes,String>> {
+    Box::new(ToUtf8 { })
 }
