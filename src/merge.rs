@@ -1,66 +1,25 @@
-
-use crate::core::{RawStore , Store};
-use crate::propaty::Propaty;
+use super::core::{RawStore, Store};
+use async_trait::async_trait;
+use std::marker::Send;
 use std::ops::BitOr;
+use std::sync::Arc;
 
-struct MergeSeed<KeyType: 'static + Clone> {
-    store1: Store<Propaty<KeyType>>,
-    store2: Store<Propaty<KeyType>>,
-    key1: Option<KeyType>,
-    key2: Option<KeyType>
+struct Merge<T: 'static + Clone + Send + Sync> {
+    base: Store<Vec<T>>,
+    add: Store<Vec<T>>,
 }
 
-impl<KeyType: 'static + Clone + PartialEq> RawStore<Vec<Propaty<KeyType>>> for MergeSeed<KeyType> {
-    fn get(&mut self) -> Option<Vec<Propaty<KeyType>>> {
-        let value1 = self.store1.get();
-        let value2 = self.store2.get();
-        let mut result : Vec<Propaty<KeyType>> = vec![];
-        if let Some(v) = value1 {
-            self.key1 = Some(v.key.clone());
-            result.push(v);
-        }
-        if let Some(v) = value2 {
-            self.key2 = Some(v.key.clone());
-            result.push(v);
-        }
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
-    }
-    fn put(&mut self, value: &Vec<Propaty<KeyType>>) {
-        if let Some(k) = self.key1.clone() {
-            if let Some(p) = value.iter().find(|p| p.key == k) {
-                self.store1.put(p);
-            }
-        }
-        if let Some(k) = self.key2.clone() {
-            if let Some(p) = value.iter().find(|p| p.key == k) {
-                self.store2.put(p);
-            }
-        }
-    }
-}
-
-
-struct MergeVec<KeyType: 'static + Clone> {
-    base: Store<Vec<Propaty<KeyType>>>,
-    add: Store<Propaty<KeyType>>,
-    add_key: Option<KeyType>,
-}
-
-impl<KeyType: 'static + Clone + PartialEq> RawStore<Vec<Propaty<KeyType>>> for MergeVec<KeyType> {
-    fn get(&mut self) -> Option<Vec<Propaty<KeyType>>> {
-        let base_value = self.base.get();
-        let add_value = self.add.get();
-        let mut result : Vec<Propaty<KeyType>> = match base_value {
+#[async_trait]
+impl<T: 'static + Clone + Send + Sync> RawStore<Vec<T>> for Merge<T> {
+    async fn get(&self) -> Option<Vec<T>> {
+        let base_value = self.base.get().await;
+        let add_value = self.add.get().await;
+        let mut result: Vec<T> = match base_value {
             Some(v) => v,
-            None => vec![]
+            None => vec![],
         };
         if let Some(v) = add_value {
-            self.add_key = Some(v.key.clone());
-            result.push(v);
+            result = vec![result, v].concat();
         }
         if result.is_empty() {
             None
@@ -68,36 +27,18 @@ impl<KeyType: 'static + Clone + PartialEq> RawStore<Vec<Propaty<KeyType>>> for M
             Some(result)
         }
     }
-    fn put(&mut self, value: &Vec<Propaty<KeyType>>) {
-        if let Some(k) = self.add_key.clone() {
-            if let Some(p) = value.iter().find(|p| p.key == k) {
-                self.add.put(p);
-            }
-        }
-        self.base.put(value);
+    async fn put(&mut self, value: Vec<T>) {
+        self.base.put(value.clone()).await;
+        self.add.put(value.clone()).await;
     }
 }
 
-
-impl<KeyType: 'static + Clone + PartialEq> BitOr<Store<Propaty<KeyType>>> for Store<Vec<Propaty<KeyType>>> {
-    type Output = Store<Vec<Propaty<KeyType>>>;
-    fn bitor(self, rhs: Store<Propaty<KeyType>>) -> Self::Output {
-        return Store::new(Box::new(MergeVec {
+impl<T: 'static + Clone + Send + Sync> BitOr<Store<Vec<T>>> for Store<Vec<T>> {
+    type Output = Store<Vec<T>>;
+    fn bitor(self, rhs: Store<Vec<T>>) -> Self::Output {
+        return Store::new(Arc::new(Merge {
             base: self,
             add: rhs,
-            add_key: None,
-        }));
-    }
-}
-
-impl<KeyType: 'static + Clone + PartialEq> BitOr<Store<Propaty<KeyType>>> for Store<Propaty<KeyType>> {
-    type Output = Store<Vec<Propaty<KeyType>>>;
-    fn bitor(self, rhs: Store<Propaty<KeyType>>) -> Self::Output {
-        return Store::new(Box::new(MergeSeed {
-            store1: self,
-            store2: rhs,
-            key1: None,
-            key2: None,
         }));
     }
 }

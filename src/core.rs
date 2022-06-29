@@ -1,88 +1,103 @@
+use async_trait::async_trait;
+use std::marker::Send;
 use std::ops::BitXor;
+use std::sync::Arc;
 
-pub struct Store<T: Clone> {
-    raw: Box<dyn RawStore<T>>,
+pub struct Store<T: Clone + Send + Sync> {
+    raw: Arc<dyn RawStore<T> + Send + Sync>,
 }
 
-impl<T: Clone> Store<T> {
-    pub fn get(&mut self) -> Option<T> {
-        self.raw.get()
+impl<T: Clone + Send + Sync> Store<T> {
+    pub async fn get(&self) -> Option<T> {
+        self.raw.get().await
     }
-    pub fn put(&mut self, value: &T) {
-        self.raw.put(value)
+    pub async fn put(&mut self, value: T) {
+        Arc::get_mut(&mut self.raw).unwrap().put(value).await
     }
-}
-
-impl<T: Clone> Store<T> {
-    pub fn new(raw: Box<dyn RawStore<T>>) -> Store<T> {
+    pub fn new(raw: Arc<dyn RawStore<T> + Send + Sync>) -> Store<T> {
         Store { raw: raw }
     }
+    pub async fn transport(
+        &mut self,
+        transporter: Arc<dyn Transport<T> + Send + Sync>,
+    ) -> &mut Store<T> {
+        transporter.transport(self).await;
+        self
+    }
 }
 
-pub trait RawStore<T: Clone> {
-    fn get(&mut self) -> Option<T>;
-    fn put(&mut self, value: &T);
+#[async_trait]
+pub trait RawStore<T: Clone + Send + Sync> {
+    async fn get(&self) -> Option<T>;
+    async fn put(&mut self, value: T);
 }
 
-
-
-pub trait Converter<ST, DT> {
-    fn to(&self,src:ST) -> Option<DT>;
-    fn from(&self,dist:DT) -> Option<ST>;
+#[async_trait]
+pub trait Transport<T: Clone + Send + Sync> {
+    async fn transport(&self, store: &mut Store<T>);
 }
 
+#[async_trait]
+pub trait Converter<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
+    async fn to(&self, src: ST) -> Option<DT>;
+    async fn from(&self, dist: DT) -> Option<ST>;
+}
 
-struct Convert<ST: Clone, DT: Clone> {
+struct Convert<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
     store: Store<ST>,
-    convert: Box<dyn Converter<ST, DT>>,
+    convert: Arc<dyn Converter<ST, DT> + Send + Sync>,
 }
 
-impl<ST: Clone, DT: Clone> RawStore<DT> for Convert<ST, DT> {
-    fn get(&mut self) -> Option<DT> {
-        let value = self.store.get();
+#[async_trait]
+impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<DT> for Convert<ST, DT> {
+    async fn get(&self) -> Option<DT> {
+        let value = self.store.get().await;
         match value {
-            Some(v) => self.convert.to(v),
-            None => None
+            Some(v) => self.convert.to(v).await,
+            None => None,
         }
     }
-    fn put(&mut self, value: &DT) {
-        let put_value = self.convert.from(value.clone());
+    async fn put(&mut self, value: DT) {
+        let put_value = self.convert.from(value.clone()).await;
         match put_value {
-            Some(v) => self.store.put(&v),
+            Some(v) => self.store.put(v).await,
             None => {}
         }
     }
 }
 
-impl<ST: Clone + 'static, DT: Clone + 'static> BitXor<Box<dyn Converter<ST, DT>>> for Store<ST> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BitXor<Arc<dyn Converter<ST, DT> + Send + Sync>> for Store<ST>
+{
     type Output = Store<DT>;
-    fn bitxor(self, rhs: Box<dyn Converter<ST, DT>>) -> Self::Output {
-        return Store::new(Box::new(Convert {
+    fn bitxor(self, rhs: Arc<dyn Converter<ST, DT> + Send + Sync>) -> Self::Output {
+        return Store::new(Arc::new(Convert {
             store: self,
             convert: rhs,
         }));
     }
 }
 
-struct SimpleStore<T: Clone> {
+struct SimpleStore<T: Clone + Send + Sync> {
     data: T,
 }
 
-impl<T: Clone> RawStore<T> for SimpleStore<T> {
-    fn get(&mut self) -> Option<T> {
+#[async_trait]
+impl<T: Clone + Send + Sync> RawStore<T> for SimpleStore<T> {
+    async fn get(&self) -> Option<T> {
         Some(self.data.clone())
     }
-    fn put(&mut self, value: &T) {
+    async fn put(&mut self, value: T) {
         self.data = value.clone();
     }
 }
 
-impl<T: Clone> SimpleStore<T> {
+impl<T: Clone + Send + Sync> SimpleStore<T> {
     fn new(data: T) -> SimpleStore<T> {
         SimpleStore { data: data }
     }
 }
 
-pub fn store<T: Clone + 'static>(data: T) -> Store<T> {
-    Store::new(Box::new(SimpleStore::new(data)))
+pub fn store<T: Clone + Send + Sync + 'static>(data: T) -> Store<T> {
+    Store::new(Arc::new(SimpleStore::new(data)))
 }

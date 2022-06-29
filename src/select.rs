@@ -1,34 +1,44 @@
+use super::core::{RawStore, Store};
+use async_trait::async_trait;
 use std::ops::BitAnd;
-use crate::core::{Store,RawStore};
+use std::sync::Arc;
 
+#[async_trait]
 pub trait Condition<T> {
-    fn validation(&self,value: &T) -> bool;
+    async fn validation(&self, value: T) -> bool;
 }
 
-struct Select<T: Clone> {
+struct Select<T: Clone + Send + Sync> {
     store: Store<T>,
-    condition: Box<dyn Condition<T>>,
+    condition: Arc<dyn Condition<T> + Send + Sync>,
 }
 
-impl<T: Clone> RawStore<T> for Select<T> {
-    fn get(&mut self) -> Option<T> {
-        let value = self.store.get();
+#[async_trait]
+impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
+    async fn get(&self) -> Option<T> {
+        let value = self.store.get().await;
         match value {
-            Some(v) => if self.condition.validation(&v) {Some(v)} else {None},
-            None => None
+            Some(v) => {
+                if self.condition.validation(v.clone()).await {
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+            None => None,
         }
     }
-    fn put(&mut self, value: &T) {
-        if self.condition.validation(value) {
-            self.store.put(value);
+    async fn put(&mut self, value: T) {
+        if self.condition.validation(value.clone()).await {
+            self.store.put(value).await;
         }
     }
 }
 
-impl<T: Clone + 'static> BitAnd<Box<dyn Condition<T>>> for Store<T> {
+impl<T: Clone + Send + Sync + 'static> BitAnd<Arc<dyn Condition<T> + Send + Sync>> for Store<T> {
     type Output = Store<T>;
-    fn bitand(self, rhs: Box<dyn Condition<T>>) -> Self::Output {
-        return Store::new(Box::new(Select {
+    fn bitand(self, rhs: Arc<dyn Condition<T> + Send + Sync>) -> Self::Output {
+        return Store::new(Arc::new(Select {
             store: self,
             condition: rhs,
         }));
@@ -36,17 +46,20 @@ impl<T: Clone + 'static> BitAnd<Box<dyn Condition<T>>> for Store<T> {
 }
 
 pub struct SimpleSelect<T> {
-    reference: T
+    reference: T,
 }
 
-impl<T: Clone + PartialEq> Condition<T> for SimpleSelect<T> {
-    fn validation(&self,value: &T) -> bool {
+#[async_trait]
+impl<T: Clone + Send + Sync + PartialEq> Condition<T> for SimpleSelect<T> {
+    async fn validation(&self, value: T) -> bool {
         self.reference == value.clone()
     }
 }
 
-pub fn select<T : Clone + PartialEq + 'static>(reference : &T) -> Box<dyn Condition<T>> {
-    Box::new(SimpleSelect{
-        reference: reference.clone()
+pub fn select<T: Clone + Send + Sync + PartialEq + 'static>(
+    reference: &T,
+) -> Arc<dyn Condition<T> + Send + Sync> {
+    Arc::new(SimpleSelect {
+        reference: reference.clone(),
     })
 }
