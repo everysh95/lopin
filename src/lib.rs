@@ -50,7 +50,7 @@ mod tests {
     #[tokio::test]
     async fn it_client() {
         let req = create_propaty(
-            store("http://httpbin.org/get".to_string()) ^ named("uri")
+            store("https://httpbin.org/get".to_string()) ^ named("uri")
                 | store(5000) ^ named("timeout"),
         )
         .await;

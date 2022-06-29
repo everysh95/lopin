@@ -2,6 +2,7 @@ use crate::{Propaty, PropatyMap, RawStore, Store};
 use async_trait::async_trait;
 use hyper::body::{to_bytes, Bytes};
 use hyper::client::Client;
+use hyper_tls::HttpsConnector;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use hyper::{Body, Method, Request};
 use std::sync::Arc;
@@ -15,23 +16,45 @@ pub struct HttpCliantStoreWithTimeOut {
 #[async_trait]
 impl RawStore<Bytes> for HttpCliantStoreWithTimeOut {
     async fn get(&self) -> Option<Bytes> {
-        let client = Client::new();
-        let mut builder = Request::builder();
-        for (key, value) in self.headers.iter() {
-            builder = builder.header(key, value);
-        }
-        if let Ok(raw_resp) = client
-            .request(
-                builder
-                    .method(Method::GET)
-                    .uri(self.uri.clone())
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-        {
-            if let Ok(bytes) = to_bytes(raw_resp.into_body()).await {
-                return Some(bytes);
+        if self.uri.clone().split_at(5).0 == "https".to_string() {
+            let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
+            let mut builder = Request::builder();
+            for (key, value) in self.headers.iter() {
+                builder = builder.header(key, value);
+            }
+            if let Ok(raw_resp) = client
+                .request(
+                    builder
+                        .method(Method::GET)
+                        .uri(self.uri.clone())
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+            {
+                if let Ok(bytes) = to_bytes(raw_resp.into_body()).await {
+                    return Some(bytes);
+                }
+            }
+        } else {
+            let client = Client::new();
+            let mut builder = Request::builder();
+            for (key, value) in self.headers.iter() {
+                builder = builder.header(key, value);
+            }
+            if let Ok(raw_resp) = client
+                .request(
+                    builder
+                        .method(Method::GET)
+                        .uri(self.uri.clone())
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+            {
+                if let Ok(bytes) = to_bytes(raw_resp.into_body()).await {
+                    return Some(bytes);
+                }
             }
         }
         None
