@@ -24,19 +24,19 @@ mod tests {
     async fn it_basic() {
         let mut pipe = store("hoge".to_string()) & select(&"hoge".to_string()) ^ named("from")
             | assert_eq_store("hoge", "") ^ named("to");
-        pipe.transport(transport("from", "to")).await;
+        transport(&mut pipe,"from", "to").await;
     }
     #[tokio::test]
     async fn it_print() {
         let mut pipe =
             store("hoge".to_string()) ^ named("from") | print_store::<String>() ^ named("to");
-        pipe.transport(transport("from", "to")).await;
+        transport(&mut pipe,"from", "to").await;
     }
     #[tokio::test]
     async fn it_swap() {
         let mut pipe =
             store("hoge".to_string()) ^ named("from") | assert_eq_store("hoge", "") ^ named("to");
-        pipe.transport(transport("from", "to")).await;
+        transport(&mut pipe,"from", "to").await;
     }
     #[tokio::test]
     async fn it_prop() {
@@ -44,7 +44,7 @@ mod tests {
             create_propaty(store(10) ^ named("num") | store("text".to_string()) ^ named("text"))
                 .await;
         let mut pipe = store(prop.clone()) ^ named("from") | assert_eq_store(prop.clone(),vec![]) ^ named("to");
-        pipe.transport(transport("from", "to")).await;
+        transport(&mut pipe,"from", "to").await;
     }
 
     #[tokio::test]
@@ -56,6 +56,6 @@ mod tests {
         .await;
         let mut pipe_cliant =
             print_store::<String>() ^ named("to") | http_store(req) ^ to_utf8() ^ named("from");
-        pipe_cliant.transport(transport("from", "to")).await;
+        transport(&mut pipe_cliant,"from", "to").await;
     }
 }

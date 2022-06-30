@@ -17,24 +17,12 @@ impl<T: Clone + Send + Sync> Store<T> {
     pub fn new(raw: Arc<dyn RawStore<T> + Send + Sync>) -> Store<T> {
         Store { raw: raw }
     }
-    pub async fn transport(
-        &mut self,
-        transporter: Arc<dyn Transport<T> + Send + Sync>,
-    ) -> &mut Store<T> {
-        transporter.transport(self).await;
-        self
-    }
 }
 
 #[async_trait]
 pub trait RawStore<T: Clone + Send + Sync> {
     async fn get(&self) -> Option<T>;
     async fn put(&mut self, value: T);
-}
-
-#[async_trait]
-pub trait Transport<T: Clone + Send + Sync> {
-    async fn transport(&self, store: &mut Store<T>);
 }
 
 #[async_trait]
