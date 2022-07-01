@@ -2,6 +2,7 @@ use super::core::{RawStore, Store};
 use async_trait::async_trait;
 use std::ops::BitAnd;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[async_trait]
 pub trait Condition<T> {
@@ -38,10 +39,10 @@ impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
 impl<T: Clone + Send + Sync + 'static> BitAnd<Arc<dyn Condition<T> + Send + Sync>> for Store<T> {
     type Output = Store<T>;
     fn bitand(self, rhs: Arc<dyn Condition<T> + Send + Sync>) -> Self::Output {
-        return Store::new(Arc::new(Select {
+        return Store::new(Arc::new(Mutex::new(Select {
             store: self,
             condition: rhs,
-        }));
+        })));
     }
 }
 

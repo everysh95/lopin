@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use std::marker::Send;
 use std::ops::BitOr;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 struct Merge<T: 'static + Clone + Send + Sync> {
     base: Store<Vec<T>>,
@@ -36,9 +37,9 @@ impl<T: 'static + Clone + Send + Sync> RawStore<Vec<T>> for Merge<T> {
 impl<T: 'static + Clone + Send + Sync> BitOr<Store<Vec<T>>> for Store<Vec<T>> {
     type Output = Store<Vec<T>>;
     fn bitor(self, rhs: Store<Vec<T>>) -> Self::Output {
-        return Store::new(Arc::new(Merge {
+        return Store::new(Arc::new(Mutex::new(Merge {
             base: self,
             add: rhs,
-        }));
+        })));
     }
 }

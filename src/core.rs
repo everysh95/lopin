@@ -2,20 +2,34 @@ use async_trait::async_trait;
 use std::marker::Send;
 use std::ops::BitXor;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+use std::pin::Pin;
 
 pub struct Store<T: Clone + Send + Sync> {
-    raw: Arc<dyn RawStore<T> + Send + Sync>,
+    raw: Arc<Mutex<dyn RawStore<T> + Send + Sync>>,
 }
 
 impl<T: Clone + Send + Sync> Store<T> {
-    pub async fn get(&self) -> Option<T> {
-        self.raw.get().await
-    }
-    pub async fn put(&mut self, value: T) {
-        Arc::get_mut(&mut self.raw).unwrap().put(value).await
-    }
-    pub fn new(raw: Arc<dyn RawStore<T> + Send + Sync>) -> Store<T> {
+    pub fn new(raw: Arc<Mutex<dyn RawStore<T> + Send + Sync>>) -> Store<T> {
         Store { raw: raw }
+    }
+    pub async fn get(&self) -> Option<T> {
+        let raw = self.raw.lock().await;
+        raw.get().await
+    }
+    pub async fn put(&self, value: T) {
+        let mut raw = self.raw.lock().await;
+        raw.put(value).await
+    }
+    pub async fn put_and_get(&mut self,value: T)-> Option<T> {
+        self.put(value).await;
+        self.get().await
+    }
+    pub async fn get_and_put(&mut self,effect: Pin<Box<dyn Fn(T) -> T>>) {
+        if let Some(value) = self.get().await {
+            let res = effect(value);
+            self.put(res).await;
+        }
     }
 }
 
@@ -59,10 +73,10 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
 {
     type Output = Store<DT>;
     fn bitxor(self, rhs: Arc<dyn Converter<ST, DT> + Send + Sync>) -> Self::Output {
-        return Store::new(Arc::new(Convert {
+        return Store::new(Arc::new(Mutex::new( Convert {
             store: self,
             convert: rhs,
-        }));
+        })));
     }
 }
 
@@ -87,5 +101,5 @@ impl<T: Clone + Send + Sync> SimpleStore<T> {
 }
 
 pub fn store<T: Clone + Send + Sync + 'static>(data: T) -> Store<T> {
-    Store::new(Arc::new(SimpleStore::new(data)))
+    Store::new(Arc::new(Mutex::new(SimpleStore::new(data))))
 }

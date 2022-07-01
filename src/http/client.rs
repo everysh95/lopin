@@ -6,6 +6,7 @@ use hyper_tls::HttpsConnector;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use hyper::{Body, Method, Request};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct HttpCliantStoreWithTimeOut {
     uri: String,
@@ -103,9 +104,9 @@ pub fn http_store(config: Vec<Propaty<String>>) -> Store<Bytes> {
         }
     }
 
-    Store::new(Arc::new(HttpCliantStoreWithTimeOut {
+    Store::new(Arc::new(Mutex::new(HttpCliantStoreWithTimeOut {
         uri: uri.to_string(),
         put_method: put_method,
         headers: HeaderMap::new(),
-    }))
+    })))
 }
