@@ -21,15 +21,21 @@ impl<T: Clone + Send + Sync> Store<T> {
         let mut raw = self.raw.lock().await;
         raw.put(value).await
     }
-    pub async fn put_and_get(&mut self,value: T)-> Option<T> {
+    pub async fn put_and_get(&self,value: T)-> Option<T> {
         self.put(value).await;
         self.get().await
     }
-    pub async fn get_and_put(&mut self,effect: Pin<Box<dyn Fn(T) -> T>>) {
+    pub async fn get_and_put(&self,effect: Pin<Box<dyn Fn(T) -> T>>) {
         if let Some(value) = self.get().await {
             let res = effect(value);
             self.put(res).await;
         }
+    }
+}
+
+impl<T: Clone + Send + Sync>  Clone for Store<T> {
+    fn clone(&self) -> Self {
+        Store::new(self.raw.clone())
     }
 }
 

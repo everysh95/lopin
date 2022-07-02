@@ -4,23 +4,27 @@ use std::any::Any;
 use std::fmt;
 use std::marker::Send;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 pub trait PropatyValue: fmt::Debug {
-    fn clone_arc(&self) -> Arc<dyn PropatyValue + Send + Sync>;
     fn get(&self) -> Arc<dyn Any + Send + Sync>;
     fn eq_value(&self, rhs: Arc<dyn Any + Send + Sync>) -> bool;
+    fn clone_value(&self) -> Arc<Mutex<dyn PropatyValue + Send + Sync>>;
 }
 
 pub struct Propaty<KeyType> {
     pub key: KeyType,
-    pub value: Arc<dyn PropatyValue + Send + Sync>,
+    pub value: Arc<Mutex<dyn PropatyValue + Send + Sync>>,
 }
 
 impl<KeyType: 'static + Clone> Clone for Propaty<KeyType> {
     fn clone(&self) -> Self {
-        Propaty {
-            key: self.key.clone(),
-            value: self.value.clone_arc(),
+        {
+            let v_raw = self.value.lock().unwrap();
+            Propaty {
+                key: self.key.clone(),
+                value: v_raw.clone_value(),
+            }
         }
     }
 }
@@ -35,7 +39,10 @@ impl<KeyType: 'static + Clone + fmt::Debug> fmt::Debug for Propaty<KeyType> {
 }
 impl<KeyType: 'static + Clone + Send + Sync + PartialEq> PartialEq for Propaty<KeyType> {
     fn eq(&self, rhs: &Propaty<KeyType>) -> bool {
-        self.key.clone() == rhs.key.clone() && self.value.eq_value(rhs.get())
+        {
+            let value = self.value.lock().unwrap();
+            self.key.clone() == rhs.key.clone() && value.eq_value(rhs.get())
+        }
     }
 }
 
@@ -46,15 +53,12 @@ impl<KeyType: 'static + Clone + Send + Sync + PartialEq> Propaty<KeyType> {
     ) -> Propaty<KeyType> {
         Propaty {
             key: key.clone(),
-            value: Arc::new(value),
+            value: Arc::new(Mutex::new(value)),
         }
     }
 }
 
 impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any> PropatyValue for T {
-    fn clone_arc(&self) -> Arc<dyn PropatyValue + Send + Sync> {
-        Arc::new(self.clone())
-    }
     fn get(&self) -> Arc<dyn Any + Send + Sync> {
         Arc::new(self.clone())
     }
@@ -64,16 +68,22 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any> PropatyVal
             None => false,
         }
     }
+    fn clone_value(&self) -> Arc<Mutex<dyn PropatyValue + Send + Sync>> {
+        Arc::new(Mutex::new(self.clone()))
+    }
 }
 
 impl<KeyType: 'static + Clone + Send + Sync> Propaty<KeyType> {
     fn get(&self) -> Arc<dyn Any + Send + Sync> {
-        self.value.get()
+        {
+            let value = self.value.lock().unwrap();
+            value.get()
+        }
     }
     pub fn rename(&self, new_key: &KeyType) -> Propaty<KeyType> {
         Propaty {
             key: new_key.clone(),
-            value: self.value.clone_arc(),
+            value: self.value.clone(),
         }
     }
 }
@@ -96,10 +106,7 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
     Converter<T, Vec<Propaty<String>>> for Named
 {
     async fn to(&self, src: T) -> Option<Vec<Propaty<String>>> {
-        Some(vec![Propaty {
-            key: self.name.clone(),
-            value: Arc::new(src),
-        }])
+        Some(vec![Propaty::new(self.name.clone(), src)])
     }
     async fn from(&self, dist: Vec<Propaty<String>>) -> Option<T> {
         dist.get_value(&self.name)
@@ -130,10 +137,7 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
         src.get_value(&self.name)
     }
     async fn from(&self, dist: T) -> Option<Vec<Propaty<String>>> {
-        Some(vec![Propaty {
-            key: self.name.clone(),
-            value: Arc::new(dist),
-        }])
+        Some(vec![Propaty::new(self.name.clone(), dist)])
     }
 }
 
