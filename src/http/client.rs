@@ -2,7 +2,6 @@ use crate::{Propaty, PropatyMap, RawStore, Store};
 use async_trait::async_trait;
 use hyper::body::{to_bytes, Bytes};
 use hyper::client::Client;
-use hyper_tls::HttpsConnector;
 use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use hyper::{Body, Method, Request};
 use std::sync::Arc;
@@ -18,7 +17,12 @@ pub struct HttpCliantStoreWithTimeOut {
 impl RawStore<Bytes> for HttpCliantStoreWithTimeOut {
     async fn get(&self) -> Option<Bytes> {
         if self.uri.clone().split_at(5).0 == "https".to_string() {
-            let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
+            let https = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .https_only()
+                .enable_http1()
+                .build();
+            let client = Client::builder().build::<_, hyper::Body>(https);
             let mut builder = Request::builder();
             for (key, value) in self.headers.iter() {
                 builder = builder.header(key, value);
