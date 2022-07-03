@@ -7,6 +7,8 @@ pub mod transport;
 // addional module
 pub mod http;
 pub mod test;
+pub mod json;
+// re-export
 pub use self::core::*;
 pub use self::merge::*;
 pub use self::propaty::*;

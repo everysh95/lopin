@@ -31,9 +31,10 @@ impl<KeyType: 'static + Clone> Clone for Propaty<KeyType> {
 
 impl<KeyType: 'static + Clone + fmt::Debug> fmt::Debug for Propaty<KeyType> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = self.value.lock().unwrap();
         f.debug_struct("Propaty")
             .field("key", &self.key)
-            .field("value", &self.value)
+            .field("value", &value)
             .finish()
     }
 }
