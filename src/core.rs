@@ -3,7 +3,6 @@ use std::marker::Send;
 use std::ops::BitXor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::pin::Pin;
 
 pub struct Store<T: Clone + Send + Sync> {
     raw: Arc<Mutex<dyn RawStore<T> + Send + Sync>>,

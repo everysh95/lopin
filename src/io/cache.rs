@@ -28,7 +28,7 @@ impl<T: Clone + Send + Sync> RawStore<T> for InMemoryCacheStore<T> {
 
 
 
-pub fn in_memory_cache<T: Clone + Send + Sync + 'static>(store: Store<T>) -> Store<T> {
+pub fn cache_with<T: Clone + Send + Sync + 'static>(store: Store<T>) -> Store<T> {
     Store::new(Arc::new(Mutex::new(
         InMemoryCacheStore {
             store: store,
