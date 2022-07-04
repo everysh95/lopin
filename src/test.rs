@@ -12,7 +12,7 @@ pub struct AssertEqStore<T: Clone + std::fmt::Debug + std::cmp::PartialEq> {
 impl<T: Clone + Send + Sync + std::cmp::PartialEq + std::fmt::Debug + 'static> RawStore<T>
     for AssertEqStore<T>
 {
-    async fn get(&self) -> Option<T> {
+    async fn get(&mut self) -> Option<T> {
         Some(self.init.clone())
     }
     async fn put(&mut self, value: T) {
@@ -36,7 +36,7 @@ pub struct PrintStore {}
 impl<T: Clone + Send + Sync + std::cmp::PartialEq + std::fmt::Display + 'static> RawStore<T>
     for PrintStore
 {
-    async fn get(&self) -> Option<T> {
+    async fn get(&mut self) -> Option<T> {
         None
     }
     async fn put(&mut self, value: T) {

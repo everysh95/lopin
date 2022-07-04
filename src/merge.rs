@@ -12,7 +12,7 @@ struct Merge<T: 'static + Clone + Send + Sync> {
 
 #[async_trait]
 impl<T: 'static + Clone + Send + Sync> RawStore<Vec<T>> for Merge<T> {
-    async fn get(&self) -> Option<Vec<T>> {
+    async fn get(&mut self) -> Option<Vec<T>> {
         let base_value = self.base.get().await;
         let add_value = self.add.get().await;
         let mut result: Vec<T> = match base_value {

@@ -1,19 +1,19 @@
 // main module
-pub mod core;
-pub mod merge;
-pub mod propaty;
-pub mod select;
-pub mod transport;
+mod core;
+mod merge;
+mod propaty;
+mod select;
+mod transport;
 // addional module
 pub mod http;
 pub mod test;
 pub mod json;
+pub mod io;
 // re-export
-pub use self::core::*;
-pub use self::merge::*;
-pub use self::propaty::*;
-pub use self::select::*;
-pub use self::transport::*;
+pub use self::core::{store, Store, RawStore, Converter};
+pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue};
+pub use self::select::{Condition, select};
+pub use self::transport::{swap, transport};
 
 #[cfg(test)]
 mod tests {
