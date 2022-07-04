@@ -15,7 +15,7 @@ pub struct HttpCliantStoreWithTimeOut {
 
 #[async_trait]
 impl RawStore<Bytes> for HttpCliantStoreWithTimeOut {
-    async fn get(&self) -> Option<Bytes> {
+    async fn get(&mut self) -> Option<Bytes> {
         if self.uri.clone().split_at(5).0 == "https".to_string() {
             let https = hyper_rustls::HttpsConnectorBuilder::new()
                 .with_native_roots()

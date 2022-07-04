@@ -16,7 +16,7 @@ struct Select<T: Clone + Send + Sync> {
 
 #[async_trait]
 impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
-    async fn get(&self) -> Option<T> {
+    async fn get(&mut self) -> Option<T> {
         let value = self.store.get().await;
         match value {
             Some(v) => {

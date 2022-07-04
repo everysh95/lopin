@@ -14,7 +14,7 @@ impl<T: Clone + Send + Sync> Store<T> {
         Store { raw: raw }
     }
     pub async fn get(&self) -> Option<T> {
-        let raw = self.raw.lock().await;
+        let mut raw = self.raw.lock().await;
         raw.get().await
     }
     pub async fn put(&self, value: T) {
@@ -25,10 +25,9 @@ impl<T: Clone + Send + Sync> Store<T> {
         self.put(value).await;
         self.get().await
     }
-    pub async fn get_and_put(&self,effect: Pin<Box<dyn Fn(T) -> T>>) {
+    pub async fn get_and_put(&self) {
         if let Some(value) = self.get().await {
-            let res = effect(value);
-            self.put(res).await;
+            self.put(value).await;
         }
     }
 }
@@ -41,7 +40,7 @@ impl<T: Clone + Send + Sync>  Clone for Store<T> {
 
 #[async_trait]
 pub trait RawStore<T: Clone + Send + Sync> {
-    async fn get(&self) -> Option<T>;
+    async fn get(&mut self) -> Option<T>;
     async fn put(&mut self, value: T);
 }
 
@@ -58,7 +57,7 @@ struct Convert<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
 
 #[async_trait]
 impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<DT> for Convert<ST, DT> {
-    async fn get(&self) -> Option<DT> {
+    async fn get(&mut self) -> Option<DT> {
         let value = self.store.get().await;
         match value {
             Some(v) => self.convert.to(v).await,
@@ -92,7 +91,7 @@ struct SimpleStore<T: Clone + Send + Sync> {
 
 #[async_trait]
 impl<T: Clone + Send + Sync> RawStore<T> for SimpleStore<T> {
-    async fn get(&self) -> Option<T> {
+    async fn get(&mut self) -> Option<T> {
         Some(self.data.clone())
     }
     async fn put(&mut self, value: T) {

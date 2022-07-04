@@ -5,9 +5,9 @@ pub use converter::{from_json, to_json};
 
 #[cfg(test)]
 mod tests {
-    use super::{from_json, to_json};
     use crate::test::assert_eq_store;
     use crate::{named, store, transport};
+    use super::{from_json, to_json};
 
     #[tokio::test]
     async fn it_from() {
