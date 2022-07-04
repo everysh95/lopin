@@ -24,12 +24,13 @@ mod tests {
                 | store(5000) ^ named("timeout"),
         )
         .await;
-        let pipe_cliant = (assert_eq_store("https://httpbin.org/get".to_string(), "".to_string())
-            ^ named("url"))
-            ^ to_json()
-            ^ named("to")
-            | http_store(req) ^ to_utf8() ^ named("from");
-        transport(pipe_cliant, "from", "to").await;
+        transport(
+            http_store(req) ^ to_utf8(),
+            assert_eq_store("https://httpbin.org/get".to_string(), "".to_string())
+                ^ named("url")
+                ^ to_json(),
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -45,9 +46,9 @@ mod tests {
                 | store(5000) ^ named("timeout"),
         )
         .await;
-        let pipe_cliant = assert_eq_store("test".to_string(), "test".to_string()) ^ named("to")
-            | http_store(req) ^ to_utf8() ^ named("from");
-        transport(pipe_cliant.clone(), "to", "from").await;
-        transport(pipe_cliant.clone(), "from", "to").await;
+        let pipe_assert = assert_eq_store("test".to_string(), "test".to_string());
+        let pipe_cliant = http_store(req) ^ to_utf8();
+        transport(pipe_assert.clone(), pipe_cliant.clone()).await;
+        transport(pipe_cliant.clone(), pipe_assert.clone()).await;
     }
 }
