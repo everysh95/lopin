@@ -3,6 +3,7 @@ mod core;
 
 pub use self::cache::cache_with;
 pub use self::core::text_file;
+pub use self::core::bin_file;
 
 #[cfg(test)]
 mod tests {
