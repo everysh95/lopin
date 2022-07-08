@@ -4,6 +4,21 @@ use std::ops::BitXor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// wrapped store
+/// 
+/// # Examples
+///
+/// ```
+/// // create simple store
+/// let my_store : Store<String> = store("text".to_string());
+/// 
+/// // get stored value
+/// let text : String = my_store.get().await;
+/// 
+/// // store value into "store"
+/// my_store.put("new text").await;
+/// 
+/// ```
 pub struct Store<T: Clone + Send + Sync> {
     raw: Arc<Mutex<dyn RawStore<T> + Send + Sync>>,
 }
@@ -37,9 +52,31 @@ impl<T: Clone + Send + Sync>  Clone for Store<T> {
     }
 }
 
+/// store trait
+/// 
+/// # Examples
+///
+/// ```
+/// struct MyStore {
+/// /** fields */
+/// }
+/// 
+/// #[async_trait]
+/// impl RawStore<Type> for MyStore {
+///     async fn get(&mut self) -> Option<T> {
+///         /** request get to MyStore */
+///     }
+///     async fn put(&mut self, value: T) {
+///         /** request put to MyStore */
+///     }
+/// }
+/// 
+/// ```
 #[async_trait]
 pub trait RawStore<T: Clone + Send + Sync> {
+    /// get request process
     async fn get(&mut self) -> Option<T>;
+    /// put request process
     async fn put(&mut self, value: T);
 }
 
