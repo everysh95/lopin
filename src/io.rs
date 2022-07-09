@@ -10,7 +10,7 @@ mod tests {
     use super::{cache_with, text_file};
     use crate::json::from_json;
     use crate::test::assert_eq_store;
-    use crate::{named, transport};
+    use crate::{named, transport, Store, Propaty};
 
     #[tokio::test]
     async fn it_no_cache() {

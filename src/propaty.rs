@@ -1,4 +1,5 @@
-use crate::core::{Converter, Store};
+use crate::convert::Converter;
+use crate::{RawConverter, Store};
 use async_trait::async_trait;
 use std::any::Any;
 use std::fmt;
@@ -104,7 +105,7 @@ pub struct Named {
 
 #[async_trait]
 impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
-    Converter<T, Vec<Propaty<String>>> for Named
+    RawConverter<T, Vec<Propaty<String>>> for Named
 {
     async fn to(&self, src: T) -> Option<Vec<Propaty<String>>> {
         Some(vec![Propaty::new(self.name.clone(), src)])
@@ -114,25 +115,29 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
     }
 }
 
-pub fn named(name: &str) -> Arc<Named> {
-    Arc::new(Named {
+pub fn named<T: Clone + Send + Sync + fmt::Debug + PartialEq + Any>(
+    name: &str,
+) -> Converter<T, Vec<Propaty<String>>> {
+    Converter::new(Arc::new(Named {
         name: name.to_string(),
-    })
+    }))
 }
 
 pub struct GetValue {
     name: String,
 }
 
-pub fn get_value(name: &str) -> Arc<GetValue> {
-    Arc::new(GetValue {
+pub fn get_value<T: Clone + Send + Sync + fmt::Debug + PartialEq + Any>(
+    name: &str,
+) -> Converter<Vec<Propaty<String>>, T> {
+    Converter::new(Arc::new(GetValue {
         name: name.to_string(),
-    })
+    }))
 }
 
 #[async_trait]
 impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
-    Converter<Vec<Propaty<String>>, T> for GetValue
+    RawConverter<Vec<Propaty<String>>, T> for GetValue
 {
     async fn to(&self, src: Vec<Propaty<String>>) -> Option<T> {
         src.get_value(&self.name)

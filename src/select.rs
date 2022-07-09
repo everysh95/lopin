@@ -1,17 +1,31 @@
 use super::core::{RawStore, Store};
 use async_trait::async_trait;
 use std::ops::BitAnd;
+use std::ops::BitOr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[async_trait]
-pub trait Condition<T> {
+pub trait RawCondition<T> {
     async fn validation(&self, value: T) -> bool;
+}
+
+pub struct Condition<T> {
+    raw: Arc<dyn RawCondition<T> + Send + Sync>,
+}
+
+impl<T> Condition<T> {
+    pub async fn validation(&self, value: T) -> bool {
+        self.raw.validation(value).await
+    }
+    pub fn new(raw: Arc<dyn RawCondition<T> + Send + Sync>) -> Condition<T> {
+        Condition { raw }
+    }
 }
 
 struct Select<T: Clone + Send + Sync> {
     store: Store<T>,
-    condition: Arc<dyn Condition<T> + Send + Sync>,
+    condition: Condition<T>,
 }
 
 #[async_trait]
@@ -36,9 +50,9 @@ impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> BitAnd<Arc<dyn Condition<T> + Send + Sync>> for Store<T> {
+impl<T: Clone + Send + Sync + 'static> BitAnd<Condition<T>> for Store<T> {
     type Output = Store<T>;
-    fn bitand(self, rhs: Arc<dyn Condition<T> + Send + Sync>) -> Self::Output {
+    fn bitand(self, rhs: Condition<T>) -> Self::Output {
         return Store::new(Arc::new(Mutex::new(Select {
             store: self,
             condition: rhs,
@@ -51,16 +65,76 @@ pub struct SimpleSelect<T> {
 }
 
 #[async_trait]
-impl<T: Clone + Send + Sync + PartialEq> Condition<T> for SimpleSelect<T> {
+impl<T: Clone + Send + Sync + PartialEq> RawCondition<T> for SimpleSelect<T> {
     async fn validation(&self, value: T) -> bool {
         self.reference == value.clone()
     }
 }
 
-pub fn select<T: Clone + Send + Sync + PartialEq + 'static>(
-    reference: &T,
-) -> Arc<dyn Condition<T> + Send + Sync> {
-    Arc::new(SimpleSelect {
+pub fn select<T: Clone + Send + Sync + PartialEq + 'static>(reference: &T) -> Condition<T> {
+    Condition::new(Arc::new(SimpleSelect {
         reference: reference.clone(),
-    })
+    }))
+}
+
+struct VecSelect<T: Clone + Send + Sync> {
+    store: Store<Vec<T>>,
+    condition: Condition<T>,
+}
+
+#[async_trait]
+impl<T: Clone + Send + Sync> RawStore<Vec<T>> for VecSelect<T> {
+    async fn get(&mut self) -> Option<Vec<T>> {
+        let value = self.store.get().await;
+        match value {
+            Some(raw_value) => {
+                let mut result: Vec<T> = vec![];
+                for v in raw_value.iter() {
+                    if self.condition.validation(v.clone()).await {
+                        result.push(v.clone());
+                    }
+                }
+                Some(result)
+            }
+            None => None,
+        }
+    }
+    async fn put(&mut self, value: Vec<T>) {
+        let mut result: Vec<T> = vec![];
+        for v in value.iter() {
+            if self.condition.validation(v.clone()).await {
+                result.push(v.clone());
+            }
+        }
+        self.store.put(result).await;
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> BitAnd<Condition<T>> for Store<Vec<T>> {
+    type Output = Store<Vec<T>>;
+    fn bitand(self, rhs: Condition<T>) -> Self::Output {
+        return Store::new(Arc::new(Mutex::new(VecSelect {
+            store: self,
+            condition: rhs,
+        })));
+    }
+}
+
+struct MultiCondition<T: Clone + Send + Sync> {
+    lhs: Condition<T>,
+    rhs: Condition<T>,
+}
+
+#[async_trait]
+impl<T: Clone + Send + Sync> RawCondition<T> for MultiCondition<T> {
+    async fn validation(&self, value: T) -> bool {
+        self.lhs.validation(value.clone()).await || self.rhs.validation(value.clone()).await
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> BitOr<Condition<T>> for Condition<T> {
+    type Output = Condition<T>;
+    fn bitor(self, rhs: Condition<T>) -> Self::Output {
+        return Condition::new(Arc::new(MultiCondition { lhs: self, rhs }));
+    }
 }
