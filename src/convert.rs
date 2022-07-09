@@ -278,3 +278,35 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
         BroadcastConverter::new(Arc::new(MultiConverter { lhs: self.to_narrowcast(), rhs: rhs.to_narrowcast() }))
     }
 }
+
+struct PutOnly;
+
+#[async_trait]
+impl<ST: 'static +  Clone + Send + Sync> RawConverter<ST, ST> for PutOnly {
+    async fn to(&self, _src: ST) -> Option<ST> {
+        None
+    }
+    async fn from(&self, dist: ST) -> Option<ST> {
+        Some(dist)
+    }
+}
+
+pub fn put_only<ST: 'static +  Clone + Send + Sync>() -> Converter<ST,ST> {
+    Converter::new(Arc::new(PutOnly))
+}
+
+struct GetOnly;
+
+#[async_trait]
+impl<ST: 'static +  Clone + Send + Sync> RawConverter<ST, ST> for GetOnly {
+    async fn to(&self, src: ST) -> Option<ST> {
+        Some(src)
+    }
+    async fn from(&self, _dist: ST) -> Option<ST> {
+        None
+    }
+}
+
+pub fn get_only<ST: 'static +  Clone + Send + Sync>() -> Converter<ST,ST> {
+    Converter::new(Arc::new(GetOnly))
+}

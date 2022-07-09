@@ -14,8 +14,7 @@ mod tests {
     use super::{http_with, from_utf8, http_get, http_put, http_store, status_ok, to_utf8};
     use crate::json::to_json;
     use crate::test::assert_eq_store;
-    use crate::{create_propaty, named, store, transport};
-    use std::net::SocketAddr;
+    use crate::{create_propaty, named, store, transport, put_only, get_only};
 
     #[tokio::test]
     async fn it_client() {
@@ -36,7 +35,7 @@ mod tests {
     #[tokio::test]
     async fn it_server() {
         let test_store = store("test".to_string());
-        let pipe_server = test_store ^ from_utf8() ^ status_ok() & (http_get() | http_put());
+        let pipe_server = (test_store ^ from_utf8() ^ status_ok()) & (http_get() ^ get_only() | http_put() ^ put_only());
         tokio::spawn(async {
             http_with("127.0.0.1:3000",pipe_server).await;
         });

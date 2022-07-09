@@ -1,4 +1,4 @@
-use crate::{Store, RawConverter, RawCondition, Condition};
+use crate::{Store, RawConverter, RawCondition, Condition, Converter};
 use hyper::body::{to_bytes, Bytes};
 use async_trait::async_trait;
 use hyper::service::{make_service_fn, service_fn};
@@ -135,28 +135,28 @@ impl RawConverter<Bytes, HttpData> for SetStatus
     }
 }
 
-pub fn status(code: StatusCode) -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
-    Arc::new(SetStatus {
+pub fn status(code: StatusCode) -> Converter<Bytes ,HttpData> {
+    Converter::new(Arc::new(SetStatus {
         code: code,
-    })
+    }))
 }
 
-pub fn status_ok() -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
+pub fn status_ok() -> Converter<Bytes ,HttpData> {
     status(StatusCode::OK)
 }
 
-pub fn status_created() -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
+pub fn status_created() -> Converter<Bytes ,HttpData> {
     status(StatusCode::CREATED)
 }
 
-pub fn status_bad_request() -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
+pub fn status_bad_request() -> Converter<Bytes ,HttpData> {
     status(StatusCode::BAD_REQUEST)
 }
 
-pub fn status_unauthorized() -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
+pub fn status_unauthorized() -> Converter<Bytes ,HttpData> {
     status(StatusCode::UNAUTHORIZED)
 }
 
-pub fn status_not_found() -> Arc<dyn RawConverter<Bytes ,HttpData> + Send + Sync> {
+pub fn status_not_found() -> Converter<Bytes ,HttpData> {
     status(StatusCode::NOT_FOUND)
 }

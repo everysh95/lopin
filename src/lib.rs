@@ -18,7 +18,7 @@ pub mod json;
 pub mod test;
 // re-export
 pub use self::core::{store, RawStore, Store};
-pub use self::convert::{RawConverter, Converter};
+pub use self::convert::{RawConverter, Converter, put_only, get_only};
 pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue};
 pub use self::select::{select, RawCondition, Condition};
 pub use self::transport::{swap, transport};
