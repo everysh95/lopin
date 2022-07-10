@@ -167,12 +167,12 @@ struct SetStatus {
 #[async_trait]
 impl RawConverter<HttpData, HttpData> for SetStatus {
     async fn to(&self, src: HttpData) -> Option<HttpData> {
+        let mut src = src;
+        src.code = Some(self.code.clone());
         Some(src)
     }
     async fn from(&self, dist: HttpData) -> Option<HttpData> {
-        let mut src = dist;
-        src.code = Some(self.code.clone());
-        Some(src)
+        Some(dist)
     }
 }
 
