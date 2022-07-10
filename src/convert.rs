@@ -1,17 +1,18 @@
 use crate::{RawStore, Store};
 use async_trait::async_trait;
 use std::marker::Send;
-use std::ops::BitOr;
 use std::ops::BitAnd;
+use std::ops::BitOr;
 use std::ops::BitXor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[derive(Clone)]
 pub struct Converter<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
     raw: Arc<dyn RawConverter<ST, DT> + Send + Sync>,
 }
 
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> Converter<ST, DT> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> Converter<ST, DT> {
     pub fn new(raw: Arc<dyn RawConverter<ST, DT> + Send + Sync>) -> Converter<ST, DT> {
         Converter { raw }
     }
@@ -21,10 +22,43 @@ impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> Converter<ST, DT> {
     pub async fn from(&self, dist: DT) -> Option<ST> {
         self.raw.from(dist).await
     }
+    pub fn to_vec_converter(&self) -> Converter<Vec<ST>, Vec<DT>> {
+        Converter::new(Arc::new(VecConverter { base: self.clone() }))
+    }
 }
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> Converter<Vec<ST>, Vec<DT>> {
-    pub fn to_broadcast(&self) -> BroadcastConverter<ST,DT> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    Converter<Vec<ST>, Vec<DT>>
+{
+    pub fn to_broadcast(&self) -> BroadcastConverter<ST, DT> {
         BroadcastConverter::new(self.raw.clone())
+    }
+}
+
+struct VecConverter<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
+    base: Converter<ST, DT>,
+}
+
+#[async_trait]
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    RawConverter<Vec<ST>, Vec<DT>> for VecConverter<ST, DT>
+{
+    async fn to(&self, src: Vec<ST>) -> Option<Vec<DT>> {
+        let mut result: Vec<DT> = vec![];
+        for sv in src.iter() {
+            if let Some(dv) = self.base.to(sv.clone()).await {
+                result.push(dv);
+            }
+        }
+        Some(result)
+    }
+    async fn from(&self, dist: Vec<DT>) -> Option<Vec<ST>> {
+        let mut result: Vec<ST> = vec![];
+        for dv in dist.iter() {
+            if let Some(sv) = self.base.from(dv.clone()).await {
+                result.push(sv);
+            }
+        }
+        Some(result)
     }
 }
 
@@ -32,8 +66,12 @@ pub struct BroadcastConverter<ST: Clone + Send + Sync, DT: Clone + Send + Sync> 
     raw: Arc<dyn RawConverter<Vec<ST>, Vec<DT>> + Send + Sync>,
 }
 
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> BroadcastConverter<ST, DT> {
-    pub fn new(raw: Arc<dyn RawConverter<Vec<ST>, Vec<DT>> + Send + Sync>) -> BroadcastConverter<ST, DT> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BroadcastConverter<ST, DT>
+{
+    pub fn new(
+        raw: Arc<dyn RawConverter<Vec<ST>, Vec<DT>> + Send + Sync>,
+    ) -> BroadcastConverter<ST, DT> {
         BroadcastConverter { raw }
     }
     pub async fn to(&self, src: Vec<ST>) -> Option<Vec<DT>> {
@@ -42,7 +80,7 @@ impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> BroadcastConverter<ST, DT
     pub async fn from(&self, dist: Vec<DT>) -> Option<Vec<ST>> {
         self.raw.from(dist).await
     }
-    pub fn to_narrowcast(&self) -> Converter<Vec<ST>,Vec<DT>> {
+    pub fn to_narrowcast(&self) -> Converter<Vec<ST>, Vec<DT>> {
         Converter::new(self.raw.clone())
     }
 }
@@ -59,7 +97,9 @@ struct Convert<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
 }
 
 #[async_trait]
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<DT> for Convert<ST, DT> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawStore<DT>
+    for Convert<ST, DT>
+{
     async fn get(&mut self) -> Option<DT> {
         let value = self.store.get().await;
         match value {
@@ -76,45 +116,15 @@ impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<DT> for Convert<
     }
 }
 
-struct VecConvert<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
-    store: Store<Vec<ST>>,
-    convert: Converter<ST, DT>,
-}
-
-#[async_trait]
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<Vec<DT>> for VecConvert<ST, DT> {
-    async fn get(&mut self) -> Option<Vec<DT>> {
-        let value = self.store.get().await;
-        match value {
-            Some(v) => {
-                let mut result: Vec<DT> = vec![];
-                for sv in v.iter() {
-                    if let Some(dv) = self.convert.to(sv.clone()).await {
-                        result.push(dv);
-                    }
-                }
-                Some(result)
-            },
-            None => None,
-        }
-    }
-    async fn put(&mut self, value: Vec<DT>) {
-        let mut result: Vec<ST> = vec![];
-        for dv in value.iter() {
-            if let Some(sv) = self.convert.from(dv.clone()).await {
-                result.push(sv);
-            }
-        }
-        self.store.put(result).await;
-    }
-}
 struct BroadcastConvert<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
     store: Store<ST>,
-    convert: BroadcastConverter<ST,DT>,
+    convert: BroadcastConverter<ST, DT>,
 }
 
 #[async_trait]
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<Vec<DT>> for BroadcastConvert<ST, DT> {
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawStore<Vec<DT>>
+    for BroadcastConvert<ST, DT>
+{
     async fn get(&mut self) -> Option<Vec<DT>> {
         let value = self.store.get().await;
         match value {
@@ -131,8 +141,8 @@ impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawStore<Vec<DT>> for Bro
     }
 }
 
-impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXor<BroadcastConverter<ST, DT>>
-    for Store<ST>
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BitXor<BroadcastConverter<ST, DT>> for Store<ST>
 {
     type Output = Store<Vec<DT>>;
     fn bitxor(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
@@ -143,8 +153,8 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXo
     }
 }
 
-impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXor<BroadcastConverter<ST, DT>>
-    for Store<Vec<ST>>
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BitXor<BroadcastConverter<ST, DT>> for Store<Vec<ST>>
 {
     type Output = Store<Vec<DT>>;
     fn bitxor(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
@@ -155,8 +165,8 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXo
     }
 }
 
-impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitAnd<BroadcastConverter<ST, DT>>
-    for Store<ST>
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BitAnd<BroadcastConverter<ST, DT>> for Store<ST>
 {
     type Output = Store<Vec<DT>>;
     fn bitand(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
@@ -167,8 +177,8 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitAn
     }
 }
 
-impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitAnd<BroadcastConverter<ST, DT>>
-    for Store<Vec<ST>>
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    BitAnd<BroadcastConverter<ST, DT>> for Store<Vec<ST>>
 {
     type Output = Store<Vec<DT>>;
     fn bitand(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
@@ -178,7 +188,6 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitAn
         })));
     }
 }
-
 
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXor<Converter<ST, DT>>
     for Store<ST>
@@ -197,10 +206,70 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXo
 {
     type Output = Store<Vec<DT>>;
     fn bitxor(self, rhs: Converter<ST, DT>) -> Self::Output {
-        return Store::new(Arc::new(Mutex::new(VecConvert {
+        return Store::new(Arc::new(Mutex::new(Convert {
             store: self,
-            convert: rhs,
+            convert: rhs.to_vec_converter(),
         })));
+    }
+}
+
+impl<
+        ST: Clone + Send + Sync + 'static,
+        SDT: Clone + Send + Sync + 'static,
+        DT: Clone + Send + Sync + 'static,
+    > BitXor<Converter<SDT, DT>> for Converter<ST, SDT>
+{
+    type Output = BroadcastConverter<ST, DT>;
+    fn bitxor(self, rhs: Converter<SDT, DT>) -> Self::Output {
+        return Converter::new(Arc::new(ChainConverter { lhs: self, rhs })).to_vec_converter().to_broadcast();
+    }
+}
+
+impl<
+        ST: Clone + Send + Sync + 'static,
+        SDT: Clone + Send + Sync + 'static,
+        DT: Clone + Send + Sync + 'static,
+    > BitXor<Converter<SDT, DT>> for BroadcastConverter<ST, SDT>
+{
+    type Output = BroadcastConverter<ST, DT>;
+    fn bitxor(self, rhs: Converter<SDT, DT>) -> Self::Output {
+        return Converter::new(Arc::new(ChainConverter { lhs: self.to_narrowcast(), rhs: rhs.to_vec_converter() })).to_broadcast();
+    }
+}
+
+struct ChainConverter<ST: Clone + Send + Sync, SDT: Clone + Send + Sync, DT: Clone + Send + Sync> {
+    lhs: Converter<ST, SDT>,
+    rhs: Converter<SDT, DT>,
+}
+
+#[async_trait]
+impl<
+        ST: Clone + Send + Sync + 'static,
+        SDT: Clone + Send + Sync + 'static,
+        DT: Clone + Send + Sync + 'static,
+    > RawConverter<ST, DT> for ChainConverter<ST, SDT, DT>
+{
+    async fn to(&self, src: ST) -> Option<DT> {
+        if let Some(lv) = self.lhs.to(src).await {
+            if let Some(rv) = self.rhs.to(lv).await {
+                Some(rv)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    async fn from(&self, dist: DT) -> Option<ST> {
+        if let Some(rv) = self.rhs.from(dist).await {
+            if let Some(lv) = self.lhs.from(rv).await {
+                Some(lv)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -210,8 +279,8 @@ struct MultiConverter<ST: Clone + Send + Sync, DT: Clone + Send + Sync> {
 }
 
 #[async_trait]
-impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawConverter<Vec<ST>, Vec<DT>>
-    for MultiConverter<ST, DT>
+impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
+    RawConverter<Vec<ST>, Vec<DT>> for MultiConverter<ST, DT>
 {
     async fn to(&self, src: Vec<ST>) -> Option<Vec<DT>> {
         let opt_lv = self.lhs.to(src.clone()).await;
@@ -246,7 +315,7 @@ impl<ST: Clone + Send + Sync, DT: Clone + Send + Sync> RawConverter<Vec<ST>, Vec
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
     BitOr<Converter<Vec<ST>, Vec<DT>>> for Converter<Vec<ST>, Vec<DT>>
 {
-    type Output = BroadcastConverter<ST,DT>;
+    type Output = BroadcastConverter<ST, DT>;
     fn bitor(self, rhs: Converter<Vec<ST>, Vec<DT>>) -> Self::Output {
         BroadcastConverter::new(Arc::new(MultiConverter { lhs: self, rhs }))
     }
@@ -255,50 +324,63 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
     BitOr<Converter<Vec<ST>, Vec<DT>>> for BroadcastConverter<ST, DT>
 {
-    type Output = BroadcastConverter<ST,DT>;
+    type Output = BroadcastConverter<ST, DT>;
     fn bitor(self, rhs: Converter<Vec<ST>, Vec<DT>>) -> Self::Output {
-        BroadcastConverter::new(Arc::new(MultiConverter { lhs: self.to_narrowcast(), rhs }))
+        BroadcastConverter::new(Arc::new(MultiConverter {
+            lhs: self.to_narrowcast(),
+            rhs,
+        }))
     }
 }
 
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
     BitOr<BroadcastConverter<ST, DT>> for Converter<Vec<ST>, Vec<DT>>
 {
-    type Output = BroadcastConverter<ST,DT>;
+    type Output = BroadcastConverter<ST, DT>;
     fn bitor(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
-        BroadcastConverter::new(Arc::new(MultiConverter { lhs: self, rhs: rhs.to_narrowcast() }))
+        BroadcastConverter::new(Arc::new(MultiConverter {
+            lhs: self,
+            rhs: rhs.to_narrowcast(),
+        }))
     }
 }
 
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
     BitOr<BroadcastConverter<ST, DT>> for BroadcastConverter<ST, DT>
 {
-    type Output = BroadcastConverter<ST,DT>;
+    type Output = BroadcastConverter<ST, DT>;
     fn bitor(self, rhs: BroadcastConverter<ST, DT>) -> Self::Output {
-        BroadcastConverter::new(Arc::new(MultiConverter { lhs: self.to_narrowcast(), rhs: rhs.to_narrowcast() }))
+        BroadcastConverter::new(Arc::new(MultiConverter {
+            lhs: self.to_narrowcast(),
+            rhs: rhs.to_narrowcast(),
+        }))
     }
 }
 
-struct PutOnly;
+struct PutOnly<ST: Clone + Send + Sync> {
+    default_value: Option<ST>
+}
 
 #[async_trait]
-impl<ST: 'static +  Clone + Send + Sync> RawConverter<ST, ST> for PutOnly {
+impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for PutOnly<ST> {
     async fn to(&self, _src: ST) -> Option<ST> {
-        None
+        self.default_value.clone()
     }
     async fn from(&self, dist: ST) -> Option<ST> {
         Some(dist)
     }
 }
 
-pub fn put_only<ST: 'static +  Clone + Send + Sync>() -> Converter<ST,ST> {
-    Converter::new(Arc::new(PutOnly))
+pub fn put_only<ST: 'static + Clone + Send + Sync>(default_value: Option<ST>) -> Converter<ST, ST> {
+    Converter::new(Arc::new(PutOnly {
+        default_value: default_value
+    }))
 }
 
 struct GetOnly;
 
 #[async_trait]
-impl<ST: 'static +  Clone + Send + Sync> RawConverter<ST, ST> for GetOnly {
+impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for GetOnly {
     async fn to(&self, src: ST) -> Option<ST> {
         Some(src)
     }
@@ -307,6 +389,22 @@ impl<ST: 'static +  Clone + Send + Sync> RawConverter<ST, ST> for GetOnly {
     }
 }
 
-pub fn get_only<ST: 'static +  Clone + Send + Sync>() -> Converter<ST,ST> {
+pub fn get_only<ST: 'static + Clone + Send + Sync>() -> Converter<ST, ST> {
     Converter::new(Arc::new(GetOnly))
+}
+
+struct Dummy;
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for Dummy {
+    async fn to(&self, src: ST) -> Option<ST> {
+        Some(src)
+    }
+    async fn from(&self, dist: ST) -> Option<ST> {
+        Some(dist)
+    }
+}
+
+pub fn dummy<ST: 'static + Clone + Send + Sync>() -> Converter<ST, ST> {
+    Converter::new(Arc::new(Dummy))
 }

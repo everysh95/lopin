@@ -1,4 +1,4 @@
-use crate::{Condition, RawCondition, Converter, RawConverter};
+use crate::{Condition, Converter, RawConverter, BroadcastConverter};
 use async_trait::async_trait;
 use std::ops::BitAnd;
 use std::ops::BitXor;
@@ -64,23 +64,23 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawCo
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitXor<Converter<ST, DT>>
     for Condition<ST>
 {
-    type Output = Converter<ST,DT>;
+    type Output = BroadcastConverter<ST,DT>;
     fn bitxor(self, rhs: Converter<ST, DT>) -> Self::Output {
         return Converter::new(Arc::new(ConditionedConverter {
             condition: self,
             converter: rhs,
-        }));
+        })).to_vec_converter().to_broadcast();
     }
 }
 
 impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> BitAnd<Condition<DT>>
     for Converter<ST, DT>
 {
-    type Output = Converter<ST,DT>;
+    type Output = BroadcastConverter<ST,DT>;
     fn bitand(self, rhs: Condition<DT>) -> Self::Output {
         return Converter::new(Arc::new(ConditionedConverterR {
             condition: rhs,
             converter: self,
-        }));
+        })).to_vec_converter().to_broadcast();
     }
 }

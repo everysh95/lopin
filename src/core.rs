@@ -8,15 +8,19 @@ use tokio::sync::Mutex;
 /// # Examples
 ///
 /// ```
-/// // create simple store
-/// let my_store : Store<String> = store("text".to_string());
+/// use lopin::{store, Store};
 /// 
-/// // get stored value
-/// let text : String = my_store.get().await;
+/// #[tokio::main]
+/// async fn main() {
+///     // create simple store
+///     let my_store : Store<String> = store("text".to_string());
 /// 
-/// // store value into "store"
-/// my_store.put("new text").await;
+///     // get stored value
+///     let text : Option<String> = my_store.get().await;
 /// 
+///     // store value into "store"
+///     my_store.put("new text".to_string()).await;
+/// }
 /// ```
 pub struct Store<T: Clone + Send + Sync> {
     raw: Arc<Mutex<dyn RawStore<T> + Send + Sync>>,
@@ -56,18 +60,35 @@ impl<T: Clone + Send + Sync>  Clone for Store<T> {
 /// # Examples
 ///
 /// ```
+/// use lopin::{RawStore, Store};
+/// use async_trait::async_trait;
+/// use std::sync::Arc;
+/// use tokio::sync::Mutex;
+/// 
 /// struct MyStore {
-/// /** fields */
+///     // fields
+/// }
+/// 
+/// #[derive(Clone)]
+/// struct SomeType {
+///     // fields
 /// }
 /// 
 /// #[async_trait]
-/// impl RawStore<Type> for MyStore {
-///     async fn get(&mut self) -> Option<T> {
-///         /** request get to MyStore */
+/// impl RawStore<SomeType> for MyStore {
+///     async fn get(&mut self) -> Option<SomeType> {
+///         // request get to MyStore
+///         None
 ///     }
-///     async fn put(&mut self, value: T) {
-///         /** request put to MyStore */
+///     async fn put(&mut self, value: SomeType) {
+///         // request put to MyStore
 ///     }
+/// }
+/// 
+/// fn my_store() -> Store<SomeType> {
+///     Store::new(Arc::new(Mutex::new(MyStore {
+///         // init field
+///     })))
 /// }
 /// 
 /// ```
