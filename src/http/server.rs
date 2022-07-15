@@ -1,4 +1,5 @@
-use crate::{Converter, RawConverter, RawStore, Store};
+use crate::json::{from_json, to_json};
+use crate::{named, store, Converter, Propaty, RawConverter, RawStore, Store};
 use async_trait::async_trait;
 use hyper::body::{to_bytes, Bytes};
 use hyper::server::conn::AddrStream;
@@ -9,6 +10,8 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use super::{from_utf8, to_utf8};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HttpData {
@@ -140,7 +143,11 @@ impl RawConverter<HttpData, HttpData> for FilterMehod {
     }
 }
 
-pub fn method(ref_method: Method,allow_get: bool, allow_put: bool) -> Converter<HttpData, HttpData> {
+pub fn method(
+    ref_method: Method,
+    allow_get: bool,
+    allow_put: bool,
+) -> Converter<HttpData, HttpData> {
     Converter::new(Arc::new(FilterMehod {
         method: ref_method.clone(),
         allow_get,
@@ -240,4 +247,41 @@ pub fn http_data_bind(store: Store<Bytes>) -> Store<HttpData> {
         method: None,
         store,
     })))
+}
+
+struct FillFromParam {
+    params: Vec<String>,
+}
+
+#[async_trait]
+impl RawConverter<HttpData, HttpData> for FillFromParam {
+    async fn to(&self, src: HttpData) -> Option<HttpData> {
+        Some(src)
+    }
+    async fn from(&self, dist: HttpData) -> Option<HttpData> {
+        let mut dist = dist;
+        if let Some(query) = dist.clone().uri.query() {
+            let query_props: Vec<Propaty<String>> = serde_urlencoded::de::from_str::<Vec<(String,String)>>(query)
+                .unwrap_or(vec![])
+                .iter()
+                .map(|p| {
+                    Propaty::new(p.0.clone(), p.1.clone())
+                })
+                .filter(|p| self.params.clone().contains(&p.key))
+                .collect();
+            dist.data = ((store(dist.data.clone().unwrap_or_default()) ^ to_utf8() ^ from_json()
+                | store(query_props))
+                ^ to_json()
+                ^ from_utf8())
+            .get()
+            .await;
+        }
+        Some(dist)
+    }
+}
+
+pub fn from_param(params: Vec<&str>) -> Converter<HttpData, HttpData> {
+    Converter::new(Arc::new(FillFromParam {
+        params: params.iter().map(|p| p.to_string()).collect(),
+    }))
 }

@@ -147,8 +147,15 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum UniqueOrder {
+    First,
+    Last,
+}
+
 pub trait PropatyMap<KeyType> {
     fn get_value<T: 'static + Clone>(&self, key: &KeyType) -> Option<T>;
+    fn unique(&self, order: UniqueOrder) -> Vec<Propaty<KeyType>>;
 }
 
 impl<KeyType: 'static + PartialEq + Clone + Send + Sync> PropatyMap<KeyType>
@@ -162,5 +169,54 @@ impl<KeyType: 'static + PartialEq + Clone + Send + Sync> PropatyMap<KeyType>
             },
             None => None,
         }
+    }
+
+    fn unique(&self, order: UniqueOrder) -> Vec<Propaty<KeyType>> {
+        let ref_vec = match order {
+            UniqueOrder::First => self.clone(),
+            UniqueOrder::Last => {
+                let mut r = self.clone();
+                r.reverse();
+                r
+            }
+        };
+        ref_vec
+            .iter()
+            .zip(
+                ref_vec
+                    .iter()
+                    .map(|p| ref_vec.iter().position(|rp| rp.key == p.key)),
+            )
+            .enumerate()
+            .filter(|(i, (_v, r))| match r {
+                Some(r) => r == i,
+                None => true,
+            })
+            .map(|(_i, (v, _p))| v.clone())
+            .collect()
+    }
+}
+
+pub struct Unique {
+    order: UniqueOrder,
+}
+
+pub fn unique_porpaty<KeyType: 'static + PartialEq + Clone + Send + Sync>(
+    order: UniqueOrder,
+) -> Converter<Vec<Propaty<KeyType>>, Vec<Propaty<KeyType>>> {
+    Converter::new(Arc::new(Unique {
+        order
+    }))
+}
+
+#[async_trait]
+impl<KeyType: 'static + PartialEq + Clone + Send + Sync>
+    RawConverter<Vec<Propaty<KeyType>>, Vec<Propaty<KeyType>>> for Unique
+{
+    async fn to(&self, src: Vec<Propaty<KeyType>>) -> Option<Vec<Propaty<KeyType>>> {
+        Some(src.unique(self.order))
+    }
+    async fn from(&self, dist: Vec<Propaty<KeyType>>) -> Option<Vec<Propaty<KeyType>>> {
+        Some(dist)
     }
 }
