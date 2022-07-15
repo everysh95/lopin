@@ -20,7 +20,7 @@ pub mod crud;
 // re-export
 pub use self::core::{store, RawStore, Store};
 pub use self::convert::{RawConverter, Converter, BroadcastConverter, put_only, get_only, dummy};
-pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue, unique_porpaty};
+pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue, unique_porpaty, UniqueOrder};
 pub use self::select::{select, RawCondition, Condition};
 pub use self::transport::{swap, transport};
 
