@@ -5,7 +5,7 @@ pub mod util;
 pub use client::{http_store, HttpCliantStoreWithTimeOut};
 pub use server::{
     http_data_bind, http_get, http_post, http_put, http_with, status_bad_request, status_created,
-    status_not_found, status_ok, status_unauthorized,
+    status_not_found, status_ok, status_unauthorized,from_param
 };
 pub use util::*;
 
