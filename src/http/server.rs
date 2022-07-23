@@ -1,28 +1,28 @@
 use crate::json::{from_json, to_json};
-use crate::{named, store, Converter, Propaty, RawConverter, RawStore, Store};
+use crate::{store, Converter, Propaty, RawConverter, Store, PropatyMap};
 use async_trait::async_trait;
 use hyper::body::{to_bytes, Bytes};
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode, Uri};
+use hyper::{Body, Method, Request, Response, Server, Uri};
+pub use hyper::StatusCode;
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::{from_utf8, to_utf8};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HttpData {
-    method: Method,
-    code: Option<StatusCode>,
-    uri: Uri,
-    data: Option<Bytes>,
+    pub method: Method,
+    pub code: Option<StatusCode>,
+    pub uri: Uri,
+    pub data: Option<Bytes>,
 }
 
 impl HttpData {
-    fn new(method: Method, uri: Uri, data: Option<Bytes>, code: Option<StatusCode>) -> HttpData {
+    pub fn new(method: Method, uri: Uri, data: Option<Bytes>, code: Option<StatusCode>) -> HttpData {
         return HttpData {
             code,
             method,
@@ -207,46 +207,41 @@ pub fn status_not_found() -> Converter<HttpData, HttpData> {
     status(StatusCode::NOT_FOUND)
 }
 
-struct BindWrap {
-    uri: Option<Uri>,
-    method: Option<Method>,
-    store: Store<Bytes>,
+struct ToHttpData {
+    header_selecter: String,
+    data_selecter: String,
 }
 
 #[async_trait]
-impl RawStore<HttpData> for BindWrap {
-    async fn get(&mut self) -> Option<HttpData> {
-        match self.store.get().await {
-            Some(value) => match &self.uri {
-                Some(uri) => match &self.method {
-                    Some(method) => Some(HttpData {
-                        uri: uri.clone(),
-                        method: method.clone(),
+impl RawConverter<Vec<Propaty<String>>,HttpData> for ToHttpData {
+    async fn to(&self, value: Vec<Propaty<String>>) -> Option<HttpData> {
+        match value.clone().get_value::<HttpData>(&self.header_selecter) {
+            Some(header) => match value.get_value::<Bytes>(&self.data_selecter) {
+                Some(value) => 
+                    Some(HttpData {
+                        uri: header.uri.clone(),
+                        method: header.method.clone(),
                         data: Some(value),
                         code: None,
                     }),
-                    None => None,
-                },
                 None => None,
             },
             None => None,
         }
     }
-    async fn put(&mut self, value: HttpData) {
-        self.uri = Some(value.uri.clone());
-        self.method = Some(value.method.clone());
-        if let Some(data) = value.data {
-            self.store.put(data).await;
+    async fn from(&self,_old: Option<Vec<Propaty<String>>>, value: HttpData) -> Option<Vec<Propaty<String>>> {
+        match value.clone().data {
+            Some(data) => Some(vec![Propaty::new(self.header_selecter.clone(), value),Propaty::new(self.data_selecter.clone(), data)]),
+            None => Some(vec![Propaty::new(self.header_selecter.clone(), value)])
         }
     }
 }
 
-pub fn http_data_bind(store: Store<Bytes>) -> Store<HttpData> {
-    Store::new(Arc::new(Mutex::new(BindWrap {
-        uri: None,
-        method: None,
-        store,
-    })))
+pub fn to_http_data(header_selecter: &str,data_selecter: &str) -> Converter<Vec<Propaty<String>>,HttpData> {
+    Converter::new(Arc::new(ToHttpData {
+        header_selecter: header_selecter.to_string(),
+        data_selecter: data_selecter.to_string(),
+    }))
 }
 
 struct FillFromParam {

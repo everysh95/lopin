@@ -14,7 +14,7 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawCo
     for ConditionedConverter<ST, DT>
 {
     async fn to(&self, src: ST) -> Option<DT> {
-        if self.condition.validation(src.clone()).await {
+        if self.condition.validation_to(src.clone()).await {
             self.converter.to(src).await
         } else {
             None
@@ -23,7 +23,7 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawCo
     async fn from(&self, old: Option<ST>, dist: DT) -> Option<ST> {
         match self.converter.from(old, dist).await {
             Some(src) => {
-                if self.condition.validation(src.clone()).await {
+                if self.condition.validation_from(src.clone()).await {
                     Some(src)
                 } else {
                     None
@@ -46,7 +46,7 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawCo
     async fn to(&self, src: ST) -> Option<DT> {
         match self.converter.to(src).await {
             Some(dist) => {
-                if self.condition.validation(dist.clone()).await {
+                if self.condition.validation_to(dist.clone()).await {
                     Some(dist)
                 } else {
                     None
@@ -56,7 +56,7 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static> RawCo
         }
     }
     async fn from(&self, old: Option<ST>, dist: DT) -> Option<ST> {
-        if self.condition.validation(dist.clone()).await {
+        if self.condition.validation_from(dist.clone()).await {
             self.converter.from(old, dist).await
         } else {
             None

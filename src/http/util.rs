@@ -1,7 +1,9 @@
-use crate::{RawConverter, Converter};
+use crate::{RawConverter, Converter, temporary, Propaty, named, Store};
 use async_trait::async_trait;
 use hyper::body::Bytes;
 use std::sync::Arc;
+
+use super::HttpData;
 
 pub struct FromUtf8 {}
 
@@ -41,4 +43,8 @@ impl RawConverter<Bytes, String> for ToUtf8 {
 
 pub fn to_utf8() -> Converter<Bytes, String> {
     Converter::new(Arc::new(ToUtf8 {}))
+}
+
+pub fn temp_header(name: &str) -> Store<Vec<Propaty<String>>> {
+    temporary::<HttpData>() ^ named(name)
 }

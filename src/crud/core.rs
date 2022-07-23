@@ -1,8 +1,7 @@
-use crate::{Condition, Converter, Propaty, PropatyMap, RawConverter, RawStore, Store};
+use crate::{Converter, Propaty, PropatyMap, RawConverter};
 use async_trait::async_trait;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -63,17 +62,31 @@ impl<
             Ok(dist) => match dist.get_value(&self.key) {
                 Some(dist_key) => match old {
                     Some(old) => match old.get_value::<Vec<Propaty<KeyType>>>(&dist_key) {
-                        None => Some(
-                            vec![
-                                vec![Propaty::new(
-                                    self.selecter.clone(),
-                                    Result::<Vec<Propaty<KeyType>>, Error>::Ok(dist.clone()),
-                                )],
-                                old[1..].to_vec(),
-                                vec![Propaty::new(dist_key, dist)],
-                            ]
-                            .concat(),
-                        ),
+                        None => {
+                            if old.is_empty() {
+                                Some(vec![
+                                    Propaty::new(
+                                        self.selecter.clone(),
+                                        Result::<Vec<Propaty<KeyType>>, Error>::Ok(dist.clone()),
+                                    ),
+                                    Propaty::new(dist_key, dist.clone()),
+                                ])
+                            } else {
+                                Some(
+                                    vec![
+                                        vec![Propaty::new(
+                                            self.selecter.clone(),
+                                            Result::<Vec<Propaty<KeyType>>, Error>::Ok(
+                                                dist.clone(),
+                                            ),
+                                        )],
+                                        old[1..].to_vec(),
+                                        vec![Propaty::new(dist_key, dist)],
+                                    ]
+                                    .concat(),
+                                )
+                            }
+                        }
                         Some(_) => Some(
                             vec![
                                 vec![Propaty::new(
@@ -88,7 +101,10 @@ impl<
                         ),
                     },
                     None => Some(vec![
-                        Propaty::new(self.selecter.clone(), dist.clone()),
+                        Propaty::new(
+                            self.selecter.clone(),
+                            Result::<Vec<Propaty<KeyType>>, Error>::Ok(dist.clone()),
+                        ),
                         Propaty::new(dist_key, dist.clone()),
                     ]),
                 },
@@ -236,21 +252,35 @@ impl<
             Ok(dist) => match dist.get_value(&self.key) {
                 Some(dist_key) => match old {
                     Some(old) => match old.get_value::<Vec<Propaty<KeyType>>>(&dist_key) {
-                        None => Some(
-                            vec![
-                                vec![Propaty::new(
+                        None => {
+                            if old.is_empty() {
+                                Some(vec![Propaty::new(
                                     self.selecter.clone(),
                                     Result::<Vec<Propaty<KeyType>>, Error>::Err(
                                         Error::ValueNotFound,
                                     ),
-                                )],
-                                old[1..].to_vec(),
-                            ]
-                            .concat(),
-                        ),
+                                )])
+                            } else {
+                                Some(
+                                    vec![
+                                        vec![Propaty::new(
+                                            self.selecter.clone(),
+                                            Result::<Vec<Propaty<KeyType>>, Error>::Err(
+                                                Error::ValueNotFound,
+                                            ),
+                                        )],
+                                        old[1..].to_vec(),
+                                    ]
+                                    .concat(),
+                                )
+                            }
+                        }
                         Some(_) => Some(
                             vec![
-                                vec![Propaty::new(self.selecter.clone(), dist.clone())],
+                                vec![Propaty::new(
+                                    self.selecter.clone(),
+                                    Result::<Vec<Propaty<KeyType>>, Error>::Ok(dist.clone()),
+                                )],
                                 old[1..]
                                     .to_vec()
                                     .iter()
@@ -266,10 +296,10 @@ impl<
                             .concat(),
                         ),
                     },
-                    None => Some(vec![
-                        Propaty::new(self.selecter.clone(), dist.clone()),
-                        Propaty::new(dist_key, dist.clone()),
-                    ]),
+                    None => Some(vec![Propaty::new(
+                        self.selecter.clone(),
+                        Result::<Vec<Propaty<KeyType>>, Error>::Err(Error::ValueNotFound),
+                    )]),
                 },
                 None => match old {
                     Some(old) => Some(

@@ -1,5 +1,6 @@
 use crate::{RawStore, Store};
 use async_trait::async_trait;
+use std::fmt::Debug;
 use std::marker::Send;
 use std::ops::BitAnd;
 use std::ops::BitOr;
@@ -397,42 +398,6 @@ impl<ST: Clone + Send + Sync + 'static, DT: Clone + Send + Sync + 'static>
     }
 }
 
-struct PutOnly<ST: Clone + Send + Sync> {
-    default_value: Option<ST>,
-}
-
-#[async_trait]
-impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for PutOnly<ST> {
-    async fn to(&self, _src: ST) -> Option<ST> {
-        self.default_value.clone()
-    }
-    async fn from(&self, _old: Option<ST>, dist: ST) -> Option<ST> {
-        Some(dist)
-    }
-}
-
-pub fn put_only<ST: 'static + Clone + Send + Sync>(default_value: Option<ST>) -> Converter<ST, ST> {
-    Converter::new(Arc::new(PutOnly {
-        default_value: default_value,
-    }))
-}
-
-struct GetOnly;
-
-#[async_trait]
-impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for GetOnly {
-    async fn to(&self, src: ST) -> Option<ST> {
-        Some(src)
-    }
-    async fn from(&self, _old: Option<ST>, _dist: ST) -> Option<ST> {
-        None
-    }
-}
-
-pub fn get_only<ST: 'static + Clone + Send + Sync>() -> Converter<ST, ST> {
-    Converter::new(Arc::new(GetOnly))
-}
-
 struct Dummy;
 
 #[async_trait]
@@ -447,4 +412,64 @@ impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, ST> for Dummy {
 
 pub fn dummy<ST: 'static + Clone + Send + Sync>() -> Converter<ST, ST> {
     Converter::new(Arc::new(Dummy))
+}
+
+struct Unwrap;
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync,ET: 'static + Clone + Send + Sync + Debug> RawConverter<Result<ST,ET>, ST> for Unwrap {
+    async fn to(&self, src: Result<ST,ET>) -> Option<ST> {
+        if src.is_ok() {
+            Some(src.unwrap())
+        } else {
+            None
+        }
+    }
+    async fn from(&self, _old: Option<Result<ST,ET>>, dist: ST) -> Option<Result<ST,ET>> {
+        Some(Ok(dist))
+    }
+}
+
+pub fn unwarp<ST: 'static + Clone + Send + Sync,ET: 'static + Clone + Send + Sync + Debug>() -> Converter<Result<ST,ET>, ST> {
+    Converter::new(Arc::new(Unwrap))
+}
+
+struct UnwrapErr;
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync + Debug,ET: 'static + Clone + Send + Sync + Debug> RawConverter<Result<ST,ET>, ET> for UnwrapErr {
+    async fn to(&self, src: Result<ST,ET>) -> Option<ET> {
+        if src.is_err() {
+            Some(src.unwrap_err())
+        } else {
+            None
+        }
+    }
+    async fn from(&self, _old: Option<Result<ST,ET>>, _dist: ET) -> Option<Result<ST,ET>> {
+        None
+    }
+}
+
+pub fn unwarp_err<ST: 'static + Clone + Send + Sync + Debug,ET: 'static + Clone + Send + Sync + Debug>() -> Converter<Result<ST,ET>, ET> {
+    Converter::new(Arc::new(UnwrapErr))
+}
+
+struct UnwrapOr<ST: 'static + Clone + Send + Sync> {
+    or: ST
+}
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync,ET: 'static + Clone + Send + Sync + Debug> RawConverter<Result<ST,ET>, ST> for UnwrapOr<ST> {
+    async fn to(&self, src: Result<ST,ET>) -> Option<ST> {
+        Some(src.unwrap_or(self.or.clone()))
+    }
+    async fn from(&self, _old: Option<Result<ST,ET>>, dist: ST) -> Option<Result<ST,ET>> {
+        Some(Ok(dist))
+    }
+}
+
+pub fn unwarp_or<ST: 'static + Clone + Send + Sync,ET: 'static + Clone + Send + Sync + Debug>(or : ST) -> Converter<Result<ST,ET>, ST> {
+    Converter::new(Arc::new(UnwrapOr {
+        or
+    }))
 }

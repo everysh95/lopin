@@ -124,3 +124,23 @@ impl<T: Clone + Send + Sync> SimpleStore<T> {
 pub fn store<T: Clone + Send + Sync + 'static>(data: T) -> Store<T> {
     Store::new(Arc::new(Mutex::new(SimpleStore::new(data))))
 }
+
+struct TempStore<T: Clone + Send + Sync> {
+    data: Option<T>,
+}
+
+#[async_trait]
+impl<T: Clone + Send + Sync> RawStore<T> for TempStore<T> {
+    async fn get(&mut self) -> Option<T> {
+        self.data.clone()
+    }
+    async fn put(&mut self, value: T) {
+        self.data = Some(value.clone());
+    }
+}
+
+pub fn temporary<T: Clone + Send + Sync + 'static>() -> Store<T> {
+    Store::new(Arc::new(Mutex::new(TempStore {
+        data: None
+    })))
+}

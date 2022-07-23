@@ -1,3 +1,5 @@
+use crate::Propaty;
+
 use super::core::{RawStore, Store};
 use async_trait::async_trait;
 use std::ops::BitAnd;
@@ -7,7 +9,8 @@ use tokio::sync::Mutex;
 
 #[async_trait]
 pub trait RawCondition<T> {
-    async fn validation(&self, value: T) -> bool;
+    async fn validation_from(&self, value: T) -> bool;
+    async fn validation_to(&self, value: T) -> bool;
 }
 
 pub struct Condition<T> {
@@ -15,8 +18,11 @@ pub struct Condition<T> {
 }
 
 impl<T> Condition<T> {
-    pub async fn validation(&self, value: T) -> bool {
-        self.raw.validation(value).await
+    pub async fn validation_from(&self, value: T) -> bool {
+        self.raw.validation_from(value).await
+    }
+    pub async fn validation_to(&self, value: T) -> bool {
+        self.raw.validation_to(value).await
     }
     pub fn new(raw: Arc<dyn RawCondition<T> + Send + Sync>) -> Condition<T> {
         Condition { raw }
@@ -34,7 +40,7 @@ impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
         let value = self.store.get().await;
         match value {
             Some(v) => {
-                if self.condition.validation(v.clone()).await {
+                if self.condition.validation_to(v.clone()).await {
                     Some(v)
                 } else {
                     None
@@ -44,7 +50,7 @@ impl<T: Clone + Send + Sync> RawStore<T> for Select<T> {
         }
     }
     async fn put(&mut self, value: T) {
-        if self.condition.validation(value.clone()).await {
+        if self.condition.validation_from(value.clone()).await {
             self.store.put(value).await;
         }
     }
@@ -66,7 +72,10 @@ pub struct SimpleSelect<T> {
 
 #[async_trait]
 impl<T: Clone + Send + Sync + PartialEq> RawCondition<T> for SimpleSelect<T> {
-    async fn validation(&self, value: T) -> bool {
+    async fn validation_from(&self, _value: T) -> bool {
+        true
+    }
+    async fn validation_to(&self, value: T) -> bool {
         self.reference == value.clone()
     }
 }
@@ -76,6 +85,79 @@ pub fn select<T: Clone + Send + Sync + PartialEq + 'static>(reference: &T) -> Co
         reference: reference.clone(),
     }))
 }
+
+struct SelectPropatyGet<T> {
+    key: T,
+}
+
+#[async_trait]
+impl<T: Clone + Send + Sync + PartialEq> RawCondition<Propaty<T>> for SelectPropatyGet<T> {
+    async fn validation_to(&self, value: Propaty<T>) -> bool {
+        self.key.clone() == value.key.clone()
+    }
+    async fn validation_from(&self, _value: Propaty<T>) -> bool {
+        true
+    }
+}
+
+pub fn select_propaty_get<T: Clone + Send + Sync + PartialEq + 'static>(key: &T) -> Condition<Propaty<T>> {
+    Condition::new(Arc::new(SelectPropatyGet {
+        key: key.clone(),
+    }))
+}
+
+struct SelectPropatyPut<T> {
+    key: T,
+}
+
+#[async_trait]
+impl<T: Clone + Send + Sync + PartialEq> RawCondition<Propaty<T>> for SelectPropatyPut<T> {
+    async fn validation_to(&self, _value: Propaty<T>) -> bool {
+        true
+    }
+    async fn validation_from(&self, value: Propaty<T>) -> bool {
+        self.key.clone() == value.key.clone()
+    }
+}
+
+pub fn select_propaty_put<T: Clone + Send + Sync + PartialEq + 'static>(key: &T) -> Condition<Propaty<T>> {
+    Condition::new(Arc::new(SelectPropatyPut {
+        key: key.clone(),
+    }))
+}
+
+struct GetOnly;
+
+#[async_trait]
+impl<T: 'static + Clone + Send + Sync + PartialEq> RawCondition<T> for GetOnly {
+    async fn validation_from(&self, _value: T) -> bool {
+        false
+    }
+    async fn validation_to(&self, _value: T) -> bool {
+        true
+    }
+}
+
+pub fn get_only<T: Clone + Send + Sync + PartialEq + 'static>() -> Condition<T> {
+    Condition::new(Arc::new(GetOnly))
+}
+
+struct PutOnly;
+
+#[async_trait]
+impl<T: 'static + Clone + Send + Sync + PartialEq> RawCondition<T> for PutOnly {
+    async fn validation_from(&self, _value: T) -> bool {
+        false
+    }
+    async fn validation_to(&self, _value: T) -> bool {
+        true
+    }
+}
+
+pub fn put_only<T: Clone + Send + Sync + PartialEq + 'static>() -> Condition<T> {
+    Condition::new(Arc::new(PutOnly))
+}
+
 
 struct VecSelect<T: Clone + Send + Sync> {
     store: Store<Vec<T>>,
@@ -90,7 +172,7 @@ impl<T: Clone + Send + Sync> RawStore<Vec<T>> for VecSelect<T> {
             Some(raw_value) => {
                 let mut result: Vec<T> = vec![];
                 for v in raw_value.iter() {
-                    if self.condition.validation(v.clone()).await {
+                    if self.condition.validation_to(v.clone()).await {
                         result.push(v.clone());
                     }
                 }
@@ -102,7 +184,7 @@ impl<T: Clone + Send + Sync> RawStore<Vec<T>> for VecSelect<T> {
     async fn put(&mut self, value: Vec<T>) {
         let mut result: Vec<T> = vec![];
         for v in value.iter() {
-            if self.condition.validation(v.clone()).await {
+            if self.condition.validation_from(v.clone()).await {
                 result.push(v.clone());
             }
         }
@@ -127,8 +209,11 @@ struct MultiCondition<T: Clone + Send + Sync> {
 
 #[async_trait]
 impl<T: Clone + Send + Sync> RawCondition<T> for MultiCondition<T> {
-    async fn validation(&self, value: T) -> bool {
-        self.lhs.validation(value.clone()).await || self.rhs.validation(value.clone()).await
+    async fn validation_from(&self, value: T) -> bool {
+        self.lhs.validation_from(value.clone()).await || self.rhs.validation_from(value.clone()).await
+    }
+    async fn validation_to(&self, value: T) -> bool {
+        self.lhs.validation_to(value.clone()).await || self.rhs.validation_to(value.clone()).await
     }
 }
 

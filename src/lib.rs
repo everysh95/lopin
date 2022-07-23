@@ -18,10 +18,10 @@ pub mod json;
 pub mod test;
 pub mod crud;
 // re-export
-pub use self::core::{store, RawStore, Store};
-pub use self::convert::{RawConverter, Converter, BroadcastConverter, put_only, get_only, dummy};
+pub use self::core::{store, temporary, RawStore, Store};
+pub use self::convert::{RawConverter, Converter, BroadcastConverter, dummy, unwarp, unwarp_or, unwarp_err};
 pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue, unique_porpaty, UniqueOrder};
-pub use self::select::{select, RawCondition, Condition};
+pub use self::select::{select, RawCondition, Condition, put_only, get_only, select_propaty_get, select_propaty_put};
 pub use self::transport::{swap, transport};
 
 #[cfg(test)]
