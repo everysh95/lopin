@@ -130,7 +130,7 @@ impl RawConverter<HttpData, HttpData> for FilterMehod {
             None
         }
     }
-    async fn from(&self, dist: HttpData) -> Option<HttpData> {
+    async fn from(&self, _old: Option<HttpData>, dist: HttpData) -> Option<HttpData> {
         if dist.method.clone() == self.method.clone() {
             let mut res = dist;
             if !self.allow_put {
@@ -178,7 +178,7 @@ impl RawConverter<HttpData, HttpData> for SetStatus {
         src.code = Some(self.code.clone());
         Some(src)
     }
-    async fn from(&self, dist: HttpData) -> Option<HttpData> {
+    async fn from(&self, _old: Option<HttpData>, dist: HttpData) -> Option<HttpData> {
         Some(dist)
     }
 }
@@ -258,7 +258,7 @@ impl RawConverter<HttpData, HttpData> for FillFromParam {
     async fn to(&self, src: HttpData) -> Option<HttpData> {
         Some(src)
     }
-    async fn from(&self, dist: HttpData) -> Option<HttpData> {
+    async fn from(&self, _old: Option<HttpData>, dist: HttpData) -> Option<HttpData> {
         let mut dist = dist;
         if let Some(query) = dist.clone().uri.query() {
             let query_props: Vec<Propaty<String>> = serde_urlencoded::de::from_str::<Vec<(String,String)>>(query)

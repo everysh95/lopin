@@ -10,7 +10,7 @@ impl RawConverter<String, Bytes> for FromUtf8 {
     async fn to(&self, src: String) -> Option<Bytes> {
         Some(Bytes::from(src.clone()))
     }
-    async fn from(&self, dist: Bytes) -> Option<String> {
+    async fn from(&self, _src: Option<String>, dist: Bytes) -> Option<String> {
         if let Ok(res) = String::from_utf8(dist.to_vec()) {
             Some(res)
         } else {
@@ -34,7 +34,7 @@ impl RawConverter<Bytes, String> for ToUtf8 {
             None
         }
     }
-    async fn from(&self, dist: String) -> Option<Bytes> {
+    async fn from(&self, _src: Option<Bytes>, dist: String) -> Option<Bytes> {
         Some(Bytes::from(dist.clone()))
     }
 }

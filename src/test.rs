@@ -1,4 +1,4 @@
-use crate::{RawStore, Store, RawConverter, Converter};
+use crate::{Converter, RawConverter, RawStore, Store};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -52,17 +52,17 @@ pub fn print_store<T: Clone + Send + Sync + std::cmp::PartialEq + std::fmt::Disp
 struct ShowDebug;
 
 #[async_trait]
-impl<ST: 'static +  Clone + Send + Sync + std::fmt::Debug> RawConverter<ST, ST> for ShowDebug {
+impl<ST: 'static + Clone + Send + Sync + std::fmt::Debug> RawConverter<ST, ST> for ShowDebug {
     async fn to(&self, src: ST) -> Option<ST> {
         println!("out: {:#?}", src);
         Some(src)
     }
-    async fn from(&self, dist: ST) -> Option<ST> {
+    async fn from(&self, _old: Option<ST>, dist: ST) -> Option<ST> {
         println!("in: {:#?}", dist);
         Some(dist)
     }
 }
 
-pub fn debug<ST: 'static +  Clone + Send + Sync + std::fmt::Debug>() -> Converter<ST,ST> {
+pub fn debug<ST: 'static + Clone + Send + Sync + std::fmt::Debug>() -> Converter<ST, ST> {
     Converter::new(Arc::new(ShowDebug))
 }

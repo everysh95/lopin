@@ -13,7 +13,7 @@ impl RawConverter<Vec<Propaty<String>>, String> for ToJson{
             Err(_) => None
         }
     }
-    async fn from(&self, dist: String) -> Option<Vec<Propaty<String>>> {
+    async fn from(&self, _old: Option<Vec<Propaty<String>>>, dist: String) -> Option<Vec<Propaty<String>>> {
         match serde_json::from_str::<Record>(&dist) {
             Ok(record) => Some(record.props),
             Err(_) => None
@@ -35,7 +35,7 @@ impl RawConverter<String,Vec<Propaty<String>>> for FromJson{
             Err(_) => None
         }
     }
-    async fn from(&self, src: Vec<Propaty<String>>) -> Option<String> {
+    async fn from(&self, _old: Option<String>, src: Vec<Propaty<String>>) -> Option<String> {
         match serde_json::to_string(&Record::new(src)) {
             Ok(json_str) => Some(json_str),
             Err(_) => None

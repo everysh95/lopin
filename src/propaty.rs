@@ -76,7 +76,7 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any> PropatyVal
 }
 
 impl<KeyType: 'static + Clone + Send + Sync> Propaty<KeyType> {
-    fn get(&self) -> Arc<dyn Any + Send + Sync> {
+    pub fn get(&self) -> Arc<dyn Any + Send + Sync> {
         {
             let value = self.value.lock().unwrap();
             value.get()
@@ -110,7 +110,7 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
     async fn to(&self, src: T) -> Option<Vec<Propaty<String>>> {
         Some(vec![Propaty::new(self.name.clone(), src)])
     }
-    async fn from(&self, dist: Vec<Propaty<String>>) -> Option<T> {
+    async fn from(&self, _old: Option<T>, dist: Vec<Propaty<String>>) -> Option<T> {
         dist.get_value(&self.name)
     }
 }
@@ -142,7 +142,11 @@ impl<T: 'static + Clone + Send + Sync + fmt::Debug + PartialEq + Any>
     async fn to(&self, src: Vec<Propaty<String>>) -> Option<T> {
         src.get_value(&self.name)
     }
-    async fn from(&self, dist: T) -> Option<Vec<Propaty<String>>> {
+    async fn from(
+        &self,
+        _old: Option<Vec<Propaty<String>>>,
+        dist: T,
+    ) -> Option<Vec<Propaty<String>>> {
         Some(vec![Propaty::new(self.name.clone(), dist)])
     }
 }
@@ -204,9 +208,7 @@ pub struct Unique {
 pub fn unique_porpaty<KeyType: 'static + PartialEq + Clone + Send + Sync>(
     order: UniqueOrder,
 ) -> Converter<Vec<Propaty<KeyType>>, Vec<Propaty<KeyType>>> {
-    Converter::new(Arc::new(Unique {
-        order
-    }))
+    Converter::new(Arc::new(Unique { order }))
 }
 
 #[async_trait]
@@ -216,7 +218,11 @@ impl<KeyType: 'static + PartialEq + Clone + Send + Sync>
     async fn to(&self, src: Vec<Propaty<KeyType>>) -> Option<Vec<Propaty<KeyType>>> {
         Some(src.unique(self.order))
     }
-    async fn from(&self, dist: Vec<Propaty<KeyType>>) -> Option<Vec<Propaty<KeyType>>> {
+    async fn from(
+        &self,
+        _odl: Option<Vec<Propaty<KeyType>>>,
+        dist: Vec<Propaty<KeyType>>,
+    ) -> Option<Vec<Propaty<KeyType>>> {
         Some(dist)
     }
 }
