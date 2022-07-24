@@ -130,11 +130,11 @@ struct GetOnly;
 
 #[async_trait]
 impl<T: 'static + Clone + Send + Sync + PartialEq> RawCondition<T> for GetOnly {
-    async fn validation_from(&self, _value: T) -> bool {
-        false
-    }
     async fn validation_to(&self, _value: T) -> bool {
         true
+    }
+    async fn validation_from(&self, _value: T) -> bool {
+        false
     }
 }
 
@@ -146,10 +146,10 @@ struct PutOnly;
 
 #[async_trait]
 impl<T: 'static + Clone + Send + Sync + PartialEq> RawCondition<T> for PutOnly {
-    async fn validation_from(&self, _value: T) -> bool {
+    async fn validation_to(&self, _value: T) -> bool {
         false
     }
-    async fn validation_to(&self, _value: T) -> bool {
+    async fn validation_from(&self, _value: T) -> bool {
         true
     }
 }
