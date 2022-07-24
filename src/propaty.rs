@@ -1,5 +1,5 @@
 use crate::convert::Converter;
-use crate::{RawConverter, Store};
+use crate::{RawConverter, Store, temporary, unwarp, unwarp_err, BroadcastConverter};
 use async_trait::async_trait;
 use std::any::Any;
 use std::fmt;
@@ -225,4 +225,12 @@ impl<KeyType: 'static + PartialEq + Clone + Send + Sync>
     ) -> Option<Vec<Propaty<KeyType>>> {
         Some(dist)
     }
+}
+
+pub fn temporary_object(name: &str)-> Store<Vec<Propaty<String>>> {
+    temporary::<Vec<Propaty<String>>>() ^ named::<Vec<Propaty<String>>>(name)
+}
+
+pub fn unwrap_propaties<ST: 'static + Clone + Send + Sync + fmt::Debug + PartialEq,ET: 'static + Clone + Send + Sync + fmt::Debug + PartialEq>(name: &str)-> BroadcastConverter<Result<ST,ET>, Vec<Propaty<String>>> {
+    unwarp() ^ named(name) | unwarp_err() ^ named(name)
 }

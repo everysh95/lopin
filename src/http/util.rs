@@ -45,6 +45,6 @@ pub fn to_utf8() -> Converter<Bytes, String> {
     Converter::new(Arc::new(ToUtf8 {}))
 }
 
-pub fn temp_header(name: &str) -> Store<Vec<Propaty<String>>> {
+pub fn temporary_header(name: &str) -> Store<Vec<Propaty<String>>> {
     temporary::<HttpData>() ^ named(name)
 }
