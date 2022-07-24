@@ -1,5 +1,5 @@
-use crate::json::{from_json, to_json};
-use crate::{store, Converter, Propaty, RawConverter, Store, PropatyMap};
+use crate::json::{from_json, to_json, from_record, Record, to_record};
+use crate::{store, Converter, Propaty, RawConverter, Store, PropatyMap, unwarp_or};
 use async_trait::async_trait;
 use hyper::body::{to_bytes, Bytes};
 use hyper::server::conn::AddrStream;
@@ -264,8 +264,9 @@ impl RawConverter<HttpData, HttpData> for FillFromParam {
                 })
                 .filter(|p| self.params.clone().contains(&p.key))
                 .collect();
-            dist.data = ((store(dist.data.clone().unwrap_or_default()) ^ to_utf8() ^ from_json()
+            dist.data = ((store(dist.data.clone().unwrap_or(Bytes::from(b"{}".to_vec()))) ^ to_utf8() ^ from_json::<Record>() ^ from_record()
                 | store(query_props))
+                ^ to_record()
                 ^ to_json()
                 ^ from_utf8())
             .get()

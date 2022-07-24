@@ -15,7 +15,7 @@ mod tests {
         from_utf8, to_http_data, http_get, http_put, http_store, http_with, status_ok, to_utf8,
         temporary_header,
     };
-    use crate::json::to_json;
+    use crate::json::{to_json, to_record};
     use crate::test::assert_eq_store;
     use crate::{create_propaty, dummy, named, store, transport};
 
@@ -30,7 +30,7 @@ mod tests {
             http_store(req) ^ to_utf8(),
             assert_eq_store("https://httpbin.org/get".to_string(), "".to_string())
                 ^ named("url")
-                ^ to_json(),
+                ^ to_record() ^ to_json(),
         )
         .await;
     }
