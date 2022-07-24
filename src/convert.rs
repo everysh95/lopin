@@ -268,6 +268,22 @@ impl<
     }
 }
 
+impl<
+        ST: Clone + Send + Sync + 'static,
+        SDT: Clone + Send + Sync + 'static,
+        DT: Clone + Send + Sync + 'static,
+    > BitXor<BroadcastConverter<SDT, DT>> for Converter<ST, SDT>
+{
+    type Output = BroadcastConverter<ST, DT>;
+    fn bitxor(self, rhs: BroadcastConverter<SDT, DT>) -> Self::Output {
+        return Converter::new(Arc::new(ChainConverter {
+            lhs: self.to_vec_converter(),
+            rhs: rhs.to_narrowcast(),
+        }))
+        .to_broadcast();
+    }
+}
+
 struct ChainConverter<ST: Clone + Send + Sync, SDT: Clone + Send + Sync, DT: Clone + Send + Sync> {
     lhs: Converter<ST, SDT>,
     rhs: Converter<SDT, DT>,
