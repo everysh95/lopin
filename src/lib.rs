@@ -19,7 +19,7 @@ pub mod test;
 pub mod crud;
 // re-export
 pub use self::core::{store, temporary, RawStore, Store};
-pub use self::convert::{RawConverter, Converter, BroadcastConverter, dummy, unwarp, unwarp_or, unwarp_err};
+pub use self::convert::{RawConverter, Converter, BroadcastConverter, dummy, unwarp, unwarp_or, unwarp_err, to_vec};
 pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue, unique_porpaty, UniqueOrder, temporary_object, flatten_porpaties};
 pub use self::select::{select, RawCondition, Condition, put_only, get_only, select_propaty_get, select_propaty_put};
 pub use self::transport::{swap, transport};

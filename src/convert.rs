@@ -473,3 +473,21 @@ pub fn unwarp_or<ST: 'static + Clone + Send + Sync,ET: 'static + Clone + Send + 
         or
     }))
 }
+struct ToVec;
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, Vec<ST>> for ToVec {
+    async fn to(&self, src: ST) -> Option<Vec<ST>> {
+        Some(vec![src])
+    }
+    async fn from(&self, _old: Option<ST>, dist: Vec<ST>) -> Option<ST> {
+        match dist.last() {
+            Some(dist) => Some(dist.clone()),
+            None => None
+        }
+    }
+}
+
+pub fn to_vec<ST: 'static + Clone + Send + Sync>() -> Converter<ST, Vec<ST>> {
+    Converter::new(Arc::new(ToVec))
+}
