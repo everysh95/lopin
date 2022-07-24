@@ -491,3 +491,21 @@ impl<ST: 'static + Clone + Send + Sync> RawConverter<ST, Vec<ST>> for ToVec {
 pub fn to_vec<ST: 'static + Clone + Send + Sync>() -> Converter<ST, Vec<ST>> {
     Converter::new(Arc::new(ToVec))
 }
+struct FromVec;
+
+#[async_trait]
+impl<ST: 'static + Clone + Send + Sync> RawConverter<Vec<ST>, ST> for FromVec {
+    async fn to(&self, src: Vec<ST>) -> Option<ST> {
+        match src.last() {
+            Some(dist) => Some(dist.clone()),
+            None => None
+        }
+    }
+    async fn from(&self, _old: Option<Vec<ST>>, dist: ST) -> Option<Vec<ST>> {
+        Some(vec![dist])
+    }
+}
+
+pub fn from_vec<ST: 'static + Clone + Send + Sync>() -> Converter<Vec<ST>, ST> {
+    Converter::new(Arc::new(FromVec))
+}
