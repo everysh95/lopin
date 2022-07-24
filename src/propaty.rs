@@ -1,5 +1,5 @@
 use crate::convert::Converter;
-use crate::{RawConverter, Store, temporary, unwarp, unwarp_err, BroadcastConverter};
+use crate::{temporary, unwarp, unwarp_err, BroadcastConverter, RawConverter, Store};
 use async_trait::async_trait;
 use std::any::Any;
 use std::fmt;
@@ -227,10 +227,29 @@ impl<KeyType: 'static + PartialEq + Clone + Send + Sync>
     }
 }
 
-pub fn temporary_object(name: &str)-> Store<Vec<Propaty<String>>> {
+pub fn temporary_object(name: &str) -> Store<Vec<Propaty<String>>> {
     temporary::<Vec<Propaty<String>>>() ^ named::<Vec<Propaty<String>>>(name)
 }
 
-pub fn unwrap_propaties<ST: 'static + Clone + Send + Sync + fmt::Debug + PartialEq,ET: 'static + Clone + Send + Sync + fmt::Debug + PartialEq>(name: &str)-> BroadcastConverter<Result<ST,ET>, Vec<Propaty<String>>> {
-    unwarp() ^ named(name) | unwarp_err() ^ named(name)
+pub struct FlattenPropaty;
+
+pub fn flatten_porpaties<KeyType: 'static + PartialEq + Clone + Send + Sync>(
+) -> Converter<Vec<Vec<Propaty<KeyType>>>, Vec<Propaty<KeyType>>> {
+    Converter::new(Arc::new(FlattenPropaty))
+}
+
+#[async_trait]
+impl<KeyType: 'static + PartialEq + Clone + Send + Sync>
+    RawConverter<Vec<Vec<Propaty<KeyType>>>, Vec<Propaty<KeyType>>> for FlattenPropaty
+{
+    async fn to(&self, src: Vec<Vec<Propaty<KeyType>>>) -> Option<Vec<Propaty<KeyType>>> {
+        Some(src.iter().cloned().flatten().collect())
+    }
+    async fn from(
+        &self,
+        _old: Option<Vec<Vec<Propaty<KeyType>>>>,
+        dist: Vec<Propaty<KeyType>>,
+    ) -> Option<Vec<Vec<Propaty<KeyType>>>> {
+        Some(vec![dist])
+    }
 }
