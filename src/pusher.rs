@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::marker::Send;
-use std::ops::Shr;
+use std::ops::BitXor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::Store;
@@ -56,14 +56,27 @@ impl<Type> Pusher<Type>
     }
 }
 
-impl<Type> Shr<Store<Type>> for Pusher<Type>
+impl<Type> BitXor<Store<Type>> for Pusher<Type>
 where
     Type: Sync + Send,
 {
     type Output = Pusher<Type>;
 
-    fn shr(self, rhs: Store<Type>) -> Self::Output {
-        let mut lhs = self.clone();
-        lhs.register(rhs)
+    fn bitxor(self, rhs: Store<Type>) -> Self::Output {
+        let mut mutable = self.clone();
+        mutable.register(rhs)
+    }
+}
+
+
+impl<Type> BitXor<Pusher<Type>> for  Store<Type>
+where
+    Type: Sync + Send,
+{
+    type Output = Pusher<Type>;
+
+    fn bitxor(self, rhs: Pusher<Type>) -> Self::Output {
+        let mut mutable = rhs.clone();
+        mutable.register(self)
     }
 }

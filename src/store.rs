@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use std::marker::Send;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::ops::Shr;
+use std::ops::BitAnd;
 
 #[async_trait]
 pub trait RawStore<Type>
@@ -58,13 +58,13 @@ where
     }
 }
 
-impl<Type> Shr<Puller<Type>> for Store<Type>
+impl<Type> BitAnd<Puller<Type>> for Store<Type>
 where
     Type: Sync + Send,
 {
     type Output = Store<Type>;
 
-    fn shr(self, rhs: Puller<Type>) -> Self::Output {
+    fn bitand(self, rhs: Puller<Type>) -> Self::Output {
         let mut lhs = self.clone();
         lhs.register(rhs)
     }

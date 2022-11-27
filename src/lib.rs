@@ -15,6 +15,7 @@ pub use self::store::*;
 pub use self::in_memory::*;
 // addional module
 pub mod console;
+pub mod test_util;
 
 #[cfg(test)]
 mod tests {
@@ -23,7 +24,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_basic() {
-        let mut pusher = direct(String::from("test\n")) >> (in_memory::<String>(None) >> console::into_stdout());
+        let mut pusher = direct(String::from("test")) ^ in_memory::<String>(None) & test_util::expect_eq(String::from("test"));
         // pusher.awake().await;
         pusher.awake().await;
     }
