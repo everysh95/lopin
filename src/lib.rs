@@ -7,12 +7,10 @@
 mod puller;
 mod pusher;
 mod store;
-mod in_memory;
 
 pub use self::puller::*;
 pub use self::pusher::*;
 pub use self::store::*;
-pub use self::in_memory::*;
 // addional module
 pub mod console;
 pub mod test_util;
@@ -24,7 +22,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_basic() {
-        let mut pusher = direct(String::from("test")) ^ in_memory::<String>(None) & test_util::expect_eq(String::from("test"));
+        let mut pusher = test_util::direct("test") ^ test_util::use_value(None) & test_util::expect_eq("test");
         // pusher.awake().await;
         pusher.awake().await;
     }
