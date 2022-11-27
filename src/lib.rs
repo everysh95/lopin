@@ -4,57 +4,27 @@
 //!
 
 // main module
-mod core;
-mod merge;
-mod convert;
-mod propaty;
-mod select;
-mod transport;
-mod multiop;
+mod puller;
+mod pusher;
+mod store;
+mod in_memory;
+
+pub use self::puller::*;
+pub use self::pusher::*;
+pub use self::store::*;
+pub use self::in_memory::*;
 // addional module
-pub mod http;
-pub mod io;
-pub mod json;
-pub mod test;
-pub mod crud;
-// re-export
-pub use self::core::{store, temporary, RawStore, Store};
-pub use self::convert::{RawConverter, Converter, BroadcastConverter, dummy, unwarp, unwarp_or, unwarp_err, to_vec, from_vec};
-pub use self::propaty::{create_propaty, get_value, named, Propaty, PropatyMap, PropatyValue, unique_porpaty, UniqueOrder, temporary_object, flatten_porpaties};
-pub use self::select::{select, RawCondition, Condition, put_only, get_only, select_propaty_get, select_propaty_put};
-pub use self::transport::{swap, transport};
+pub mod console;
 
 #[cfg(test)]
 mod tests {
 
-    use super::test::{assert_eq_store, print_store};
     use super::*;
 
     #[tokio::test]
     async fn it_basic() {
-        transport(
-            store("hoge".to_string()) & select(&"hoge".to_string()),
-            assert_eq_store("hoge".to_string(), "".to_string()),
-        )
-        .await;
-    }
-    #[tokio::test]
-    async fn it_print() {
-        transport(store("hoge".to_string()), print_store::<String>()).await;
-    }
-    #[tokio::test]
-    async fn it_swap() {
-        swap(
-            assert_eq_store("b".to_string(), "a".to_string()),
-            assert_eq_store("a".to_string(), "b".to_string()),
-        )
-        .await;
-    }
-    #[tokio::test]
-    async fn it_prop() {
-        let prop =
-            create_propaty(store(10) ^ named("num") | store("text".to_string()) ^ named("text"))
-                .await;
-        transport(store(prop.clone()), assert_eq_store(prop.clone(), vec![])).await;
+        let mut pusher = direct(String::from("test\n")) >> (in_memory::<String>(None) >> console::into_stdout());
+        // pusher.awake().await;
+        pusher.awake().await;
     }
 }
