@@ -1,71 +1,84 @@
-use crate::Puller;
 use async_trait::async_trait;
 use std::marker::Send;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use std::ops::BitAnd;
+use std::ops::{Add, Mul, ShlAssign};
 
 #[async_trait]
 pub trait RawStore<Type>
 where
-    Type: Sync + Send,
+    Type: Send + Sync + Clone,
 {
-    async fn push(&mut self, value: Type, puller_list: &mut Vec<Puller<Type>>);
+    fn push(&mut self, value: Vec<Type>);
+    fn pull(&self) -> Vec<Type>;
 }
 
-pub struct Store<Type>
+
+#[derive(Clone)]
+pub struct ValueStore<Type>
 where
-    Type: Sync + Send,
+    Type: Send + Sync + Clone,
 {
-    pullers: Vec<Puller<Type>>,
-    raw: Arc<Mutex<dyn RawStore<Type> + Send + Sync>>,
+    value: Vec<Type>,
 }
 
-impl<Type> Clone for Store<Type>
+pub fn pull<Type>(store: &Box<dyn RawStore<Type>>) -> Box<dyn RawStore<Type>>
 where
-    Type: Sync + Send,
+    Type: Send + Sync + Clone + 'static,
 {
-    fn clone(&self) -> Self {
-        Store {
-            pullers: self.pullers.clone(),
-            raw: self.raw.clone(),
-        }
+    ValueStore::new(store.pull())
+}
+
+impl<Type> ValueStore<Type>
+where
+    Type: Send + Sync + Clone + 'static,
+{
+    pub fn new(value:Vec<Type>) -> Box<dyn RawStore<Type>> {
+        Box::new(
+            ValueStore { value }
+        )
     }
 }
 
-impl<Type> Store<Type>
+impl<Type> RawStore<Type> for ValueStore<Type>
 where
-    Type: Sync + Send,
+    Type: Sync + Send + Clone
 {
-    pub fn new<RawStoreType>(raw_store: RawStoreType) -> Self
-    where
-        RawStoreType: RawStore<Type> + Send + Sync + 'static,
-    {
-        Store {
-            pullers: vec![],
-            raw: Arc::new(Mutex::new(raw_store)),
-        }
+    fn pull(&self) -> Vec<Type> {
+        self.value.clone()
     }
-
-    pub fn register(&mut self, puller: Puller<Type>) -> Self {
-        self.pullers.push(puller);
-        self.clone()
-    }
-
-    pub async fn push(&mut self, value: Type) {
-        let mut mutable_raw = self.raw.lock().await;
-        mutable_raw.push(value,&mut self.pullers).await;
+    fn push(&mut self,value:Vec<Type>) {
+        self.value = value;
     }
 }
 
-impl<Type> BitAnd<Puller<Type>> for Store<Type>
+impl<Type> Mul<Box<dyn Fn(&Type) -> bool>> for Box<dyn RawStore<Type>>
 where
-    Type: Sync + Send,
+    Type: Sync + Send + Clone + 'static,
 {
-    type Output = Store<Type>;
+    type Output = Box<dyn RawStore<Type>>;
 
-    fn bitand(self, rhs: Puller<Type>) -> Self::Output {
-        let mut lhs = self.clone();
-        lhs.register(rhs)
+    fn mul(self, rhs: Box<dyn Fn(&Type) -> bool>) -> Self::Output {
+        ValueStore::new(self.pull().iter().filter(|&v| rhs(v)).cloned().collect())
+    }
+}
+
+impl<Type> Add<Type> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone + 'static,
+{
+    type Output = Box<dyn RawStore<Type>>;
+
+    fn add(self, rhs: Type) -> Self::Output {
+        let mut new_value = self.pull();
+        new_value.push(rhs);
+        ValueStore::new(new_value)
+    }
+}
+
+impl<Type> ShlAssign<Box<dyn RawStore<Type>>> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone,
+{
+    fn shl_assign(&mut self, rhs: Box<dyn RawStore<Type>>) {
+        self.push(rhs.pull())
     }
 }

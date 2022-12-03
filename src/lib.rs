@@ -1,29 +1,42 @@
 //! # lopin - library of pipeline input
 //!
-//! `lopin` is a Web API framework featuring a two-way pipeline and resources abstracted as stores. 
+//! `lopin` is a Query framework featuring a two-way pipeline and resources abstracted as stores. 
 //!
 
 // main module
-mod puller;
-mod pusher;
 mod store;
 
-pub use self::puller::*;
-pub use self::pusher::*;
 pub use self::store::*;
 // addional module
-pub mod console;
-pub mod test_util;
+pub mod file;
+// pub mod test_util;
+// pub mod http;
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+    use super::file;
 
-    #[tokio::test]
-    async fn it_basic() {
-        let mut pusher = test_util::direct("test") ^ test_util::use_value(None) & test_util::expect_eq("test");
-        // pusher.awake().await;
-        pusher.awake().await;
+    #[test]
+    fn it_basic() {
+        let mut test_store = ValueStore::new(vec!["hello", "world"]);
+        // create
+        test_store <<= pull(&test_store) + "hoge";
+        assert_eq!(test_store.pull(), vec!["hello", "world", "hoge"]);
+        // update
+        test_store <<= pull(&test_store) * Box::new(|&x| x != "hoge") + "huga";
+        assert_eq!(test_store.pull(), vec!["hello", "world", "huga"]);
+    }
+
+    #[test]
+    fn it_file() {
+        let mut test_store = file::FileStore::new::<String>("./testdoc/test.json", vec![]);
+        // create
+        test_store <<= pull(&test_store) + String::from("hoge");
+        assert_eq!(test_store.pull(), vec!["hoge"]);
+        // update
+        test_store <<= pull(&test_store) * Box::new(|x| x != &String::from("hoge")) + String::from("huga");
+        assert_eq!(test_store.pull(), vec!["huga"]);
     }
 }
