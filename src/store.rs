@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::marker::Send;
-use std::ops::{Add, Mul, ShlAssign};
+use std::ops::{Add, Mul, ShlAssign, Div, Sub};
 
 #[async_trait]
 pub trait RawStore<Type>
@@ -50,14 +50,25 @@ where
     }
 }
 
-impl<Type> Mul<Box<dyn Fn(&Type) -> bool>> for Box<dyn RawStore<Type>>
+impl<Type> Div<Box<dyn Fn(&Type) -> bool>> for Box<dyn RawStore<Type>>
 where
     Type: Sync + Send + Clone + 'static,
 {
     type Output = Box<dyn RawStore<Type>>;
 
-    fn mul(self, rhs: Box<dyn Fn(&Type) -> bool>) -> Self::Output {
+    fn div(self, rhs: Box<dyn Fn(&Type) -> bool>) -> Self::Output {
         ValueStore::new(self.pull().iter().filter(|&v| rhs(v)).cloned().collect())
+    }
+}
+
+impl<Type> Mul<Box<dyn Fn(&Type) -> Type>> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone + 'static,
+{
+    type Output = Box<dyn RawStore<Type>>;
+
+    fn mul(self, rhs: Box<dyn Fn(&Type) -> Type>) -> Self::Output {
+        ValueStore::new(self.pull().iter().map(|v| rhs(v)).collect())
     }
 }
 
@@ -71,6 +82,43 @@ where
         let mut new_value = self.pull();
         new_value.push(rhs);
         ValueStore::new(new_value)
+    }
+}
+
+impl<Type> Sub<Type> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone + PartialEq + 'static,
+{
+    type Output = Box<dyn RawStore<Type>>;
+
+    fn sub(self, rhs: Type) -> Self::Output {
+        ValueStore::new(self.pull().iter().filter(|&v| v != &rhs).cloned().collect())
+    }
+}
+
+impl<Type> Add<Box<dyn RawStore<Type>>> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone + 'static,
+{
+    type Output = Box<dyn RawStore<Type>>;
+
+    fn add(self, rhs: Box<dyn RawStore<Type>>) -> Self::Output {
+        let mut old_value = self.pull();
+        let mut new_value = rhs.pull();
+        old_value.append(&mut new_value);
+        ValueStore::new(old_value)
+    }
+}
+
+impl<Type> Sub<Box<dyn RawStore<Type>>> for Box<dyn RawStore<Type>>
+where
+    Type: Sync + Send + Clone + PartialEq + 'static,
+{
+    type Output = Box<dyn RawStore<Type>>;
+
+    fn sub(self, rhs: Box<dyn RawStore<Type>>) -> Self::Output {
+        let remove_value = rhs.pull();
+        ValueStore::new(self.pull().iter().filter(|&v| remove_value.iter().all(|r| v != r)).cloned().collect())
     }
 }
 

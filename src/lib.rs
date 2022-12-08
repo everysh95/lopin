@@ -25,18 +25,18 @@ mod tests {
         test_store <<= pull(&test_store) + "hoge";
         assert_eq!(test_store.pull(), vec!["hello", "world", "hoge"]);
         // update
-        test_store <<= pull(&test_store) * Box::new(|&x| x != "hoge") + "huga";
+        test_store <<= pull(&test_store) / Box::new(|&x| x != "hoge") + "huga";
         assert_eq!(test_store.pull(), vec!["hello", "world", "huga"]);
     }
 
     #[test]
     fn it_file() {
-        let mut test_store = file::FileStore::new::<String>("./testdoc/test.json", vec![]);
+        let mut test_store = file::FileStore::new("./testdoc/test.json");
         // create
-        test_store <<= pull(&test_store) + String::from("hoge");
+        test_store <<= ValueStore::new(vec![String::from("hoge")]);
         assert_eq!(test_store.pull(), vec!["hoge"]);
         // update
-        test_store <<= pull(&test_store) * Box::new(|x| x != &String::from("hoge")) + String::from("huga");
+        test_store <<= pull(&test_store) / Box::new(|x| x != &String::from("hoge")) + pull(&test_store) / Box::new(|x| x == &String::from("hoge")) * Box::new(|_v| String::from("huga"));
         assert_eq!(test_store.pull(), vec!["huga"]);
     }
 }
