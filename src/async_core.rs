@@ -164,6 +164,46 @@ impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<AsyncPip
     }
 }
 
+struct SimpleAsyncPipeline<VT, RT, ET> {
+  raw: Arc<dyn Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send + 'static>> + Sync + Send + 'static>
+}
+
+#[async_trait]
+impl<VT: Send, RT: Send, ET: Send> RawAsyncPipeline<VT,RT, ET> for SimpleAsyncPipeline<VT, RT, ET> {
+    async fn async_run(&self,value: VT) -> Result<RT, ET> {
+      (self.raw)(value).await
+    }
+}
+
+pub fn async_pipeline<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static, F: Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send + 'static>> + Sync + Send + 'static>(f : F) -> AsyncPipeline<VT,RT,ET> {
+  return AsyncPipeline::new(SimpleAsyncPipeline{
+    raw: Arc::new(f),
+  });
+}
+
+struct FilterAsyncPipeline<VT,ET: 'static> {
+  raw: Arc<dyn Fn(&VT) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> + Sync + Send + 'static>,
+  error: ET
+}
+
+#[async_trait]
+impl<VT: Send + Sync,ET : Sync + Clone> RawAsyncPipeline<VT,VT,ET> for FilterAsyncPipeline<VT,ET> {
+    async fn async_run(&self,v: VT) -> Result<VT, ET> {
+      if (self.raw)(&v).await {
+        Ok(v)
+      } else {
+        Err(self.error.clone())
+      }
+    }
+}
+
+pub fn async_filter<T: Send + Sync + 'static, ET: Clone + Sync + Send + 'static, F: Fn(&T) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>> + Sync + Send + 'static>(f: F, error: ET) -> AsyncPipeline<T, T, ET> {
+  return AsyncPipeline::new(FilterAsyncPipeline {
+    raw: Arc::new(f),
+    error
+  });
+}
+
 
 #[async_trait]
 pub trait RawAsyncFramework<VT,RT,ET> {
