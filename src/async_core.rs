@@ -240,6 +240,26 @@ impl<VT: 'static,RT: 'static,ET: 'static> BitXor<AsyncFramework<VT,RT,ET>> for A
     }
 }
 
+impl<VT: Send + 'static,RT: Send + 'static,ET: Send + 'static> BitXor<Pipeline<VT,RT,ET>> for AsyncFramework<VT,RT,ET> {
+    type Output = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+    fn bitxor(self, rhs: Pipeline<VT,RT,ET>) -> Self::Output {
+      Box::pin(async move {
+        self.run(AsyncPipeline::new(rhs)).await;
+      })
+    }
+}
+
+impl<VT: Send + 'static,RT: Send + 'static,ET: Send + 'static> BitXor<AsyncFramework<VT,RT,ET>> for Pipeline<VT,RT,ET> {
+    type Output = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+    fn bitxor(self, rhs: AsyncFramework<VT,RT,ET>) -> Self::Output {
+      Box::pin(async move {
+        rhs.run(AsyncPipeline::new(self)).await;
+      })
+    }
+}
+
 impl<VT: 'static,RT: 'static,ET: 'static> BitXor<AsyncPipeline<VT,RT,ET>> for AsyncFramework<VT,RT,ET> {
     type Output = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
