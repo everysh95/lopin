@@ -127,6 +127,29 @@ impl<VT: Clone + Send + 'static, RT: Send + 'static, ET: Send + 'static> BitOr<A
     }
 }
 
+impl<VT: Clone + Send + 'static, RT: Send + 'static, ET: Send + 'static> BitOr<Pipeline<VT,RT,ET>> for AsyncPipeline<VT,RT,ET> {
+    type Output = AsyncPipeline<VT,RT,ET>;
+
+    fn bitor(self, rhs: Pipeline<VT,RT,ET>) -> Self::Output {
+      AsyncPipeline::new(OrAsyncPipeline {
+        lhs: self,
+        rhs: AsyncPipeline::new(rhs)
+      })
+    }
+}
+
+impl<VT: Clone + Send + 'static, RT: Send + 'static, ET: Send + 'static> BitOr<AsyncPipeline<VT,RT,ET>> for Pipeline<VT,RT,ET> {
+    type Output = AsyncPipeline<VT,RT,ET>;
+
+    fn bitor(self, rhs: AsyncPipeline<VT,RT,ET>) -> Self::Output {
+      AsyncPipeline::new(OrAsyncPipeline {
+        lhs: AsyncPipeline::new(self),
+        rhs
+      })
+    }
+}
+
+
 
 impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<AsyncPipeline<VT,RT,ET>> for Pin<Box<dyn Future<Output = Result<VT,ET>> + Send + 'static>> {
     type Output = Pin<Box<dyn Future<Output = Result<RT,ET>> + Send + 'static>>;
