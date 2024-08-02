@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::{filter, pipeline, AsyncFramework, AsyncPipeline, Framework, Pipeline, RawAsyncFramework, RawAsyncPipeline};
+use crate::{filter, pipeline, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline, RawPipeline};
 use http_body_util::{BodyExt, Full};
 use hyper::{body::{Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
 use hyper_util::rt::TokioIo;
@@ -13,7 +13,7 @@ struct HttpServer {
 
 #[async_trait]
 impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> for HttpServer {
-  async fn run(&self, pipeline: Pipeline<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
+  async fn run(&self, pipeline: AsyncPipeline<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
     let listener = TcpListener::bind(&self.address).await.unwrap();
     loop {
       let (tcp, _) = listener.accept().await.unwrap();
@@ -21,7 +21,7 @@ impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>
       if let Err(err) = http1::Builder::new()
           .serve_connection(io, service_fn(|req| {
             async {
-              Ok::<_,Infallible>(match Ok(req) & to_bytes() & pipeline.clone() {
+              Ok::<_,Infallible>(match (Ok(req) & to_bytes() & pipeline.clone()).await {
                 Ok(a) => a.clone(),
                 Err(a) => a.clone(),
               })
@@ -35,7 +35,7 @@ impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>
   }
 }
 
-pub fn http_server(address: &str) -> Framework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
+pub fn http_server(address: &str) -> AsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
   AsyncFramework::new(HttpServer {
     address: address.to_string()
   })
@@ -65,7 +65,7 @@ struct ToByte;
 
 #[async_trait]
 impl RawAsyncPipeline<Request<Incoming>, Request<Bytes>, Response<Full<Bytes>>> for ToByte {
-  async fn run(&self,r: Request<Incoming>) -> Result<Request<Bytes>, Response<Full<Bytes>>> {
+  async fn async_run(&self,r: Request<Incoming>) -> Result<Request<Bytes>, Response<Full<Bytes>>> {
     match r.into_body().collect().await {
       Ok(r) => Ok(Request::new(r.to_bytes())),
       Err(_) => Err(Response::builder().status(400).body(Full::new(Bytes::from(""))).unwrap()),
@@ -73,15 +73,15 @@ impl RawAsyncPipeline<Request<Incoming>, Request<Bytes>, Response<Full<Bytes>>> 
   }
 }
 
-pub fn to_bytes() -> Pipeline<Request<Incoming>,Request<Bytes>, Response<Full<Bytes>>> {
+pub fn to_bytes() -> AsyncPipeline<Request<Incoming>,Request<Bytes>, Response<Full<Bytes>>> {
   AsyncPipeline::new(ToByte)
 }
 
 struct FromBody;
 
 #[async_trait]
-impl RawAsyncPipeline<Request<Bytes>, String, Response<Full<Bytes>>> for FromBody {
-  async fn run(&self,r: Request<Bytes>) -> Result<String, Response<Full<Bytes>>> {
+impl RawPipeline<Request<Bytes>, String, Response<Full<Bytes>>> for FromBody {
+  fn run(&self,r: Request<Bytes>) -> Result<String, Response<Full<Bytes>>> {
     match String::from_utf8(r.into_body().to_vec()) {
       Ok(s) => Ok(s),
       Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap()),
@@ -90,7 +90,7 @@ impl RawAsyncPipeline<Request<Bytes>, String, Response<Full<Bytes>>> for FromBod
 }
 
 pub fn from_body() -> Pipeline<Request<Bytes>, String, Response<Full<Bytes>>> {
-  AsyncPipeline::new(FromBody)
+  Pipeline::new(FromBody)
 }
 
 pub fn to_body() -> Pipeline<String, Response<Full<Bytes>>, Response<Full<Bytes>>> {
