@@ -12,8 +12,8 @@ struct HttpServer {
 }
 
 #[async_trait]
-impl RawAsyncFramework<Request<Incoming>,Response<Full<Bytes>>,Response<Full<Bytes>>> for HttpServer {
-  async fn run(&self, pipeline: Pipeline<Request<Incoming>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
+impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> for HttpServer {
+  async fn run(&self, pipeline: Pipeline<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
     let listener = TcpListener::bind(&self.address).await.unwrap();
     loop {
       let (tcp, _) = listener.accept().await.unwrap();
@@ -21,7 +21,7 @@ impl RawAsyncFramework<Request<Incoming>,Response<Full<Bytes>>,Response<Full<Byt
       if let Err(err) = http1::Builder::new()
           .serve_connection(io, service_fn(|req| {
             async {
-              Ok::<_,Infallible>(match Ok(req) & pipeline.clone() {
+              Ok::<_,Infallible>(match Ok(req) & to_bytes() & pipeline.clone() {
                 Ok(a) => a.clone(),
                 Err(a) => a.clone(),
               })
@@ -35,48 +35,61 @@ impl RawAsyncFramework<Request<Incoming>,Response<Full<Bytes>>,Response<Full<Byt
   }
 }
 
-pub fn http_server(address: &str) -> Framework<Request<Incoming>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
+pub fn http_server(address: &str) -> Framework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
   AsyncFramework::new(HttpServer {
     address: address.to_string()
   })
 }
 
-pub fn method_is(method: Method) -> Pipeline<Request<Incoming>, Request<Incoming>, Response<Full<Bytes>>>{
-  filter(move|r : &Request<Incoming>| r.method() == &method, Response::builder().status(405).body(Full::new(Bytes::from(""))).unwrap())
+pub fn method_is<T: Clone + 'static>(method: Method) -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>>{
+  filter(move|r : &Request<T>| r.method() == &method, Response::builder().status(405).body(Full::new(Bytes::from(""))).unwrap())
 }
 
-pub fn http_get() -> Pipeline<Request<Incoming>, Request<Incoming>, Response<Full<Bytes>>> {
-  method_is(Method::GET)
+pub fn http_get<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+  method_is::<T>(Method::GET)
 }
 
-pub fn http_post() -> Pipeline<Request<Incoming>, Request<Incoming>, Response<Full<Bytes>>> {
-  method_is(Method::POST)
+pub fn http_post<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+  method_is::<T>(Method::POST)
 }
 
-pub fn http_put() -> Pipeline<Request<Incoming>, Request<Incoming>, Response<Full<Bytes>>> {
-  method_is(Method::PUT)
+pub fn http_put<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+  method_is::<T>(Method::PUT)
 }
 
-pub fn http_delete() -> Pipeline<Request<Incoming>, Request<Incoming>, Response<Full<Bytes>>> {
-  method_is(Method::DELETE)
+pub fn http_delete<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+  method_is::<T>(Method::DELETE)
 }
 
-struct FromBody;
+struct ToByte;
 
 #[async_trait]
-impl RawAsyncPipeline<Request<Incoming>, String, Response<Full<Bytes>>> for FromBody {
-  async fn run(&self,r: Request<Incoming>) -> Result<String, Response<Full<Bytes>>> {
+impl RawAsyncPipeline<Request<Incoming>, Request<Bytes>, Response<Full<Bytes>>> for ToByte {
+  async fn run(&self,r: Request<Incoming>) -> Result<Request<Bytes>, Response<Full<Bytes>>> {
     match r.into_body().collect().await {
-      Ok(r) => match String::from_utf8(r.to_bytes().to_vec()) {
-        Ok(s) => Ok(s),
-        Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap()),
-      },
+      Ok(r) => Ok(Request::new(r.to_bytes())),
       Err(_) => Err(Response::builder().status(400).body(Full::new(Bytes::from(""))).unwrap()),
     }
   }
 }
 
-pub fn from_body() -> Pipeline<Request<Incoming>, String, Response<Full<Bytes>>> {
+pub fn to_bytes() -> Pipeline<Request<Incoming>,Request<Bytes>, Response<Full<Bytes>>> {
+  AsyncPipeline::new(ToByte)
+}
+
+struct FromBody;
+
+#[async_trait]
+impl RawAsyncPipeline<Request<Bytes>, String, Response<Full<Bytes>>> for FromBody {
+  async fn run(&self,r: Request<Bytes>) -> Result<String, Response<Full<Bytes>>> {
+    match String::from_utf8(r.into_body().to_vec()) {
+      Ok(s) => Ok(s),
+      Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap()),
+    }
+  }
+}
+
+pub fn from_body() -> Pipeline<Request<Bytes>, String, Response<Full<Bytes>>> {
   AsyncPipeline::new(FromBody)
 }
 
