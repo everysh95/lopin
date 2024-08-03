@@ -1,11 +1,13 @@
-use std::convert::Infallible;
+use std::{collections::HashMap, convert::Infallible, error::Error, marker::PhantomData};
 
-use crate::{filter, pipeline, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline, RawPipeline};
+use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline, RawPipeline};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::{Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
+use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
 use hyper_util::rt::TokioIo;
+use regex::Regex;
 use tokio::net::TcpListener;
 use async_trait::async_trait;
+use serde_urlencoded::from_str;
 
 struct HttpServer {
   address: String
@@ -77,22 +79,47 @@ pub fn to_bytes() -> AsyncPipeline<Request<Incoming>,Request<Bytes>, Response<Fu
   AsyncPipeline::new(ToByte)
 }
 
-struct FromBody;
+pub fn to_string() -> Pipeline<Request<Bytes>, Request<String>, Response<Full<Bytes>>> {
+  request(pipeline(|b: Bytes| Ok(b.to_vec())) & from_utf8())
+}
 
-#[async_trait]
-impl RawPipeline<Request<Bytes>, String, Response<Full<Bytes>>> for FromBody {
-  fn run(&self,r: Request<Bytes>) -> Result<String, Response<Full<Bytes>>> {
-    match String::from_utf8(r.into_body().to_vec()) {
-      Ok(s) => Ok(s),
-      Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap()),
+pub fn from_body<T: Body + Send + Sync + 'static>() -> Pipeline<Request<T>, T, Response<Full<Bytes>>> {
+  pipeline(|bv: Request<T>| Ok(bv.into_body()))
+}
+
+pub fn request<VT : Send + Sync + 'static,RT:Send + Sync + 'static,ET: Send + Sync + Error + 'static>(pipline: Pipeline<VT,RT, ET>) -> Pipeline<Request<VT>,Request<RT>, Response<Full<Bytes>>> {
+  pipeline(move |r: Request<VT>| {
+    let params = r.into_body();
+    match Ok(params) & pipline.clone() {
+      Ok(v) => Ok(Request::new(v)),
+      Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap())
     }
-  }
+  })
 }
 
-pub fn from_body() -> Pipeline<Request<Bytes>, String, Response<Full<Bytes>>> {
-  Pipeline::new(FromBody)
+pub fn with_query() -> Pipeline<Request<HashMap<String,String>>, Request<HashMap<String,String>>, Response<Full<Bytes>>> {
+  pipeline(|r: Request<HashMap<String,String>>| {
+    let rr = &r;
+    let params = rr.body();
+    let new_params = match from_str::<HashMap<String,String>>(rr.uri().query().unwrap_or_default()) {
+      Ok(v) => {
+        let mut new_paramas = params.clone();
+        for (k,v) in v.iter() {
+          new_paramas.insert(k.clone(), v.clone());
+        }
+        Ok(new_paramas)
+      },
+      Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap()),
+    };
+
+    match new_params {
+      Ok(params) => Ok(Request::new(params)),
+      Err(e) => Err(e)
+    }
+  })
 }
 
-pub fn to_body() -> Pipeline<String, Response<Full<Bytes>>, Response<Full<Bytes>>> {
-  pipeline(|s| Ok(Response::builder().status(200).body(Full::new(Bytes::from(s))).unwrap()))
+
+pub fn to_body<T: Into<Bytes> + Send + Sync + 'static>() -> Pipeline<T, Response<Full<Bytes>>, Response<Full<Bytes>>> {
+  pipeline(|s: T| Ok(Response::builder().status(200).body(Full::new(s.into())).unwrap()))
 }
