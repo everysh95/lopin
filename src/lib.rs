@@ -9,6 +9,7 @@ pub mod util;
 pub mod testing;
 pub mod json;
 pub mod http_server;
+pub mod command;
 
 pub use core::*;
 pub use async_core::*;
