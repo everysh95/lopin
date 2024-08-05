@@ -1,8 +1,8 @@
 use std::{collections::HashMap, convert::Infallible, error::Error};
 
-use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
+use crate::{async_pipeline, filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
+use hyper::{body::{self, Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
 use hyper_util::rt::TokioIo;
 use regex::Regex;
 use tokio::net::TcpListener;
@@ -14,8 +14,8 @@ struct HttpServer {
 }
 
 #[async_trait]
-impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> for HttpServer {
-  async fn run(&self, pipeline: AsyncPipeline<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
+impl RawAsyncFramework<Request<HttpContext<Bytes>>,Response<Full<Bytes>>,Response<Full<Bytes>>> for HttpServer {
+  async fn run(&self, pipeline: AsyncPipeline<Request<HttpContext<Bytes>>,Response<Full<Bytes>>,Response<Full<Bytes>>>) {
     let listener = TcpListener::bind(&self.address).await.unwrap();
     loop {
       let (tcp, _) = listener.accept().await.unwrap();
@@ -23,7 +23,7 @@ impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>
       if let Err(err) = http1::Builder::new()
           .serve_connection(io, service_fn(|req| {
             async {
-              Ok::<_,Infallible>(match (Ok(req) & to_bytes() & pipeline.clone()).await {
+              Ok::<_,Infallible>(match (Ok(req) & to_bytes() & wrap_context() & pipeline.clone()).await {
                 Ok(a) => a.clone(),
                 Err(a) => a.clone(),
               })
@@ -37,29 +37,43 @@ impl RawAsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>
   }
 }
 
-pub fn http_server(address: &str) -> AsyncFramework<Request<Bytes>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
+pub fn http_server(address: &str) -> AsyncFramework<Request<HttpContext<Bytes>>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
   AsyncFramework::new(HttpServer {
     address: address.to_string()
   })
 }
 
-pub fn method_is<T: Clone + 'static>(method: Method) -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>>{
-  filter(move|r : &Request<T>| r.method() == &method, Response::builder().status(405).body(Full::new(Bytes::from(""))).unwrap())
+pub struct HttpContext<T> {
+  pub params: HashMap<String,String>,
+  pub body: T
 }
 
-pub fn http_get<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+impl<T> HttpContext<T> {
+  pub fn new(params: HashMap<String,String>, body: T) -> HttpContext<T>{
+    HttpContext {
+      params,
+      body
+    }
+  }
+}
+
+pub fn method_is<T: Clone + 'static>(method: Method) -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>>{
+  filter(move|r : &Request<HttpContext<T>>| r.method() == &method, Response::builder().status(405).body(Full::new(Bytes::from(""))).unwrap())
+}
+
+pub fn http_get<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   method_is::<T>(Method::GET)
 }
 
-pub fn http_post<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+pub fn http_post<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   method_is::<T>(Method::POST)
 }
 
-pub fn http_put<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+pub fn http_put<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   method_is::<T>(Method::PUT)
 }
 
-pub fn http_delete<T: Clone + 'static>() -> Pipeline<Request<T>, Request<T>, Response<Full<Bytes>>> {
+pub fn http_delete<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   method_is::<T>(Method::DELETE)
 }
 
@@ -75,11 +89,15 @@ impl RawAsyncPipeline<Request<Incoming>, Request<Bytes>, Response<Full<Bytes>>> 
   }
 }
 
-pub fn to_bytes() -> AsyncPipeline<Request<Incoming>,Request<Bytes>, Response<Full<Bytes>>> {
+fn to_bytes() -> AsyncPipeline<Request<Incoming>,Request<Bytes>, Response<Full<Bytes>>> {
   AsyncPipeline::new(ToByte)
 }
 
-pub fn to_string() -> Pipeline<Request<Bytes>, Request<String>, Response<Full<Bytes>>> {
+fn wrap_context<T: Send  + 'static>() -> Pipeline<Request<T>,Request<HttpContext<T>>, Response<Full<Bytes>>> {
+  pipeline(|r: Request<T>| Ok(r.map(|body| HttpContext::new(HashMap::new(), body))))
+}
+
+pub fn to_string() -> Pipeline<Request<HttpContext<Bytes>>, Request<HttpContext<String>>, Response<Full<Bytes>>> {
   request(pipeline(|b: Bytes| Ok(b.to_vec())) & from_utf8())
 }
 
@@ -87,24 +105,24 @@ pub fn from_body<T: Body + Send + Sync + 'static>() -> Pipeline<Request<T>, T, R
   pipeline(|bv: Request<T>| Ok(bv.into_body()))
 }
 
-pub fn request<VT : Send + Sync + 'static,RT:Send + Sync + 'static,ET: Send + Sync + Error + 'static>(pipline: Pipeline<VT,RT, ET>) -> Pipeline<Request<VT>,Request<RT>, Response<Full<Bytes>>> {
-  pipeline(move |r: Request<VT>| {
-    let req = r.map(|v: VT| Ok(v) & pipline.clone());
-    match req.body() {
-      Ok(_) => Ok(req.map(|r| r.unwrap())),
+pub fn request<VT : Send + Sync + 'static,RT:Send + Sync + 'static,ET: Send + Sync + Error + 'static>(pipline: Pipeline<VT,RT, ET>) -> Pipeline<Request<HttpContext<VT>>,Request<HttpContext<RT>>, Response<Full<Bytes>>> {
+  pipeline(move |r: Request<HttpContext<VT>>| {
+    let req = r.map(|v: HttpContext<VT>| HttpContext::new(v.params,Ok(v.body) & pipline.clone()));
+    match &req.body().body {
+      Ok(_) => Ok(req.map(|r| HttpContext::new(r.params, r.body.unwrap()))),
       Err(e) => Err(Response::builder().status(400).body(Full::new(Bytes::from(e.to_string()))).unwrap())
     }
   })
 }
 
-pub fn from_path(path: &str) -> Pipeline<Request<HashMap<String,String>>, Request<HashMap<String,String>>, Response<Full<Bytes>>> {
+pub fn from_path<T: 'static>(path: &str) -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   let path_re_base = Regex::new("/:(\\w+)").unwrap();
   let path_params: Vec<String> = path_re_base.clone().captures_iter(path).map(|m| m.get(1).unwrap().as_str().to_string()).collect();
   let re_text = path_params.iter().fold(path.to_string(),|p: String,pp| p.replace(&format!(":{pp}"), &format!("(?<{pp}>[^/]+)")));
   let path_re = Regex::new(&re_text).unwrap();
-  pipeline(move |r: Request<HashMap<String, String>>| {
+  pipeline(move |r: Request<HttpContext<T>>| {
     let rr = &r;
-    let params = rr.body();
+    let params = rr.body().params.clone();
     let new_params = match path_re.clone().captures(rr.uri().path()) {
         Some(r) => {
           let mut new_paramas = params.clone();
@@ -118,16 +136,16 @@ pub fn from_path(path: &str) -> Pipeline<Request<HashMap<String,String>>, Reques
         None => Err(Response::builder().status(404).body(Full::new(Bytes::from(""))).unwrap()),
     };
     match new_params {
-      Ok(params) => Ok(r.map(|_| params)),
+      Ok(params) => Ok(r.map(|old| HttpContext::new(params, old.body))),
       Err(e) => Err(e)
     }
   })
 }
 
-pub fn from_query() -> Pipeline<Request<HashMap<String,String>>, Request<HashMap<String,String>>, Response<Full<Bytes>>> {
-  pipeline(|r: Request<HashMap<String,String>>| {
+pub fn from_query<T: 'static>() -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
+  pipeline(|r: Request<HttpContext<T>>| {
     let rr = &r;
-    let params = rr.body();
+    let params = rr.body().params.clone();
     let new_params = match from_str::<HashMap<String,String>>(rr.uri().query().unwrap_or_default()) {
       Ok(v) => {
         let mut new_paramas = params.clone();
@@ -140,7 +158,7 @@ pub fn from_query() -> Pipeline<Request<HashMap<String,String>>, Request<HashMap
     };
 
     match new_params {
-      Ok(params) => Ok(r.map(|_| params)),
+      Ok(params) => Ok(r.map(|old| HttpContext::new(params, old.body))),
       Err(e) => Err(e)
     }
   })

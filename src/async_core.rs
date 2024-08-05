@@ -164,6 +164,19 @@ impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<AsyncPip
     }
 }
 
+impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<Pipeline<VT,RT,ET>> for Pin<Box<dyn Future<Output = Result<VT,ET>> + Send + 'static>> {
+    type Output = Pin<Box<dyn Future<Output = Result<RT,ET>> + Send + 'static>>;
+
+    fn bitand(self, rhs: Pipeline<VT,RT,ET>) -> Self::Output {
+      Box::pin(async move {
+        match self.await {
+            Ok(v) => rhs.run(v),
+            Err(e) => Err(e),
+        }
+      })
+    }
+}
+
 struct SimpleAsyncPipeline<VT, RT, ET> {
   raw: Arc<dyn Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send + 'static>> + Sync + Send + 'static>
 }
