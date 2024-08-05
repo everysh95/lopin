@@ -1,8 +1,8 @@
 use std::{collections::HashMap, convert::Infallible, error::Error};
 
-use crate::{async_pipeline, filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
+use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::{self, Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
+use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
 use hyper_util::rt::TokioIo;
 use regex::Regex;
 use tokio::net::TcpListener;
@@ -43,6 +43,7 @@ pub fn http_server(address: &str) -> AsyncFramework<Request<HttpContext<Bytes>>,
   })
 }
 
+#[derive(Debug)]
 pub struct HttpContext<T> {
   pub params: HashMap<String,String>,
   pub body: T
@@ -101,8 +102,8 @@ pub fn to_string() -> Pipeline<Request<HttpContext<Bytes>>, Request<HttpContext<
   request(pipeline(|b: Bytes| Ok(b.to_vec())) & from_utf8())
 }
 
-pub fn from_body<T: Body + Send + Sync + 'static>() -> Pipeline<Request<T>, T, Response<Full<Bytes>>> {
-  pipeline(|bv: Request<T>| Ok(bv.into_body()))
+pub fn from_body<T: Body + Send + Sync + 'static>() -> Pipeline<Request<HttpContext<T>>, HttpContext<T>, Response<Full<Bytes>>> {
+  pipeline(|bv: Request<HttpContext<T>>| Ok(bv.into_body()))
 }
 
 pub fn request<VT : Send + Sync + 'static,RT:Send + Sync + 'static,ET: Send + Sync + Error + 'static>(pipline: Pipeline<VT,RT, ET>) -> Pipeline<Request<HttpContext<VT>>,Request<HttpContext<RT>>, Response<Full<Bytes>>> {
