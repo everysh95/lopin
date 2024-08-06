@@ -49,6 +49,12 @@ pub struct HttpContext<T> {
   pub body: T
 }
 
+impl<T: Clone> Clone for HttpContext<T>  {
+    fn clone(&self) -> Self {
+        Self { params: self.params.clone(), body: self.body.clone() }
+    }
+}
+
 impl<T> HttpContext<T> {
   pub fn new(params: HashMap<String,String>, body: T) -> HttpContext<T>{
     HttpContext {
