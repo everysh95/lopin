@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::Infallible, error::Error};
+use std::{borrow::Borrow, collections::HashMap, convert::Infallible, error::Error};
 
 use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
 use http_body_util::{BodyExt, Full};
@@ -89,8 +89,12 @@ struct ToByte;
 #[async_trait]
 impl RawAsyncPipeline<Request<Incoming>, Request<Bytes>, Response<Full<Bytes>>> for ToByte {
   async fn async_run(&self,r: Request<Incoming>) -> Result<Request<Bytes>, Response<Full<Bytes>>> {
-    match r.into_body().collect().await {
-      Ok(r) => Ok(Request::new(r.to_bytes())),
+    let mut body: Option<Incoming> = None;
+    let r = r.map(|b| body = Some(b));
+    match body.unwrap().collect().await {
+      Ok(rr) => {
+        Ok(r.map(|_| rr.to_bytes()))
+      },
       Err(_) => Err(Response::builder().status(400).body(Full::new(Bytes::from(""))).unwrap()),
     }
   }
