@@ -129,7 +129,7 @@ pub fn request<VT : Send + Sync + 'static,RT:Send + Sync + 'static,ET: Send + Sy
 pub fn from_path<T: 'static>(path: &str) -> Pipeline<Request<HttpContext<T>>, Request<HttpContext<T>>, Response<Full<Bytes>>> {
   let path_re_base = Regex::new("/:(\\w+)").unwrap();
   let path_params: Vec<String> = path_re_base.clone().captures_iter(path).map(|m| m.get(1).unwrap().as_str().to_string()).collect();
-  let re_text = path_params.iter().fold(path.to_string(),|p: String,pp| p.replace(&format!(":{pp}"), &format!("(?<{pp}>[^/]+)")));
+  let re_text = path_params.iter().fold(format!("^{path}$"),|p: String,pp| p.replace(&format!(":{pp}"), &format!("(?<{pp}>[^/]+)")));
   let path_re = Regex::new(&re_text).unwrap();
   pipeline(move |r: Request<HttpContext<T>>| {
     let rr = &r;
