@@ -84,6 +84,10 @@ pub fn http_delete<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Re
   method_is::<T>(Method::DELETE)
 }
 
+pub fn http_error<T: Clone + 'static>(status: u16, message: &'static str) -> Result<T, Response<Full<Bytes>>> {
+  Err(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
+}
+
 struct ToByte;
 
 #[async_trait]
