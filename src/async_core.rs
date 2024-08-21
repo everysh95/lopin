@@ -178,7 +178,7 @@ impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<Pipeline
 }
 
 struct SimpleAsyncPipeline<VT, RT, ET> {
-  raw: Arc<dyn Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send>> + Sync + Send + 'static>
+  raw: Arc<dyn Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send>> + Sync + Send>
 }
 
 #[async_trait]
