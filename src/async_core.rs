@@ -177,18 +177,18 @@ impl<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static> BitAnd<Pipeline
     }
 }
 
-struct SimpleAsyncPipeline<VT, RT, ET> {
-  raw: Arc<dyn Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send>> + Sync + Send>
+struct SimpleAsyncPipeline<VT, RT, ET, FT : Future<Output = Result<RT,ET>> + Send> {
+  raw: Arc<dyn Fn(VT) -> FT + Sync + Send>
 }
 
 #[async_trait]
-impl<VT: Send, RT: Send, ET: Send> RawAsyncPipeline<VT,RT, ET> for SimpleAsyncPipeline<VT, RT, ET> {
+impl<VT: Send, RT: Send, ET: Send, FT : Future<Output = Result<RT,ET>> + Send> RawAsyncPipeline<VT,RT, ET> for SimpleAsyncPipeline<VT, RT, ET, FT> {
     async fn async_run(&self,value: VT) -> Result<RT, ET> {
       (self.raw)(value).await
     }
 }
 
-pub fn async_pipeline<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static, F: Fn(VT) -> Pin<Box<dyn Future<Output = Result<RT,ET>> + Send>> + Sync + Send + 'static>(f : F) -> AsyncPipeline<VT,RT,ET> {
+pub fn async_pipeline<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static, FT : Future<Output = Result<RT,ET>> + Send + 'static, F: Fn(VT) -> FT + Sync + Send + 'static>(f : F) -> AsyncPipeline<VT,RT,ET> {
   return AsyncPipeline::new(SimpleAsyncPipeline{
     raw: Arc::new(f),
   });
