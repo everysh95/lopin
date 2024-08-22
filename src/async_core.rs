@@ -195,18 +195,18 @@ pub fn async_pipeline<VT: Send + 'static, RT: Send + 'static, ET: Send + 'static
 }
 
 struct SimpleAsyncPipelineWithContext<CT, VT, RT, ET, FT : Future<Output = Result<RT,ET>> + Send> {
-  context: Arc<CT>,
-  raw: Arc<dyn Fn(&CT, VT) -> FT + Sync + Send>
+  context: CT,
+  raw: Arc<dyn Fn(CT, VT) -> FT + Sync + Send>
 }
 
 #[async_trait]
-impl<CT : Sync + Send,VT: Send, RT: Send, ET: Send, FT : Future<Output = Result<RT,ET>> + Send> RawAsyncPipeline<VT,RT, ET> for SimpleAsyncPipelineWithContext<CT, VT, RT, ET, FT> {
+impl<CT : Clone + Sync,VT: Send, RT: Send, ET: Send, FT : Future<Output = Result<RT,ET>> + Send> RawAsyncPipeline<VT,RT, ET> for SimpleAsyncPipelineWithContext<CT, VT, RT, ET, FT> {
     async fn async_run(&self,value: VT) -> Result<RT, ET> {
-      (self.raw)(self.context.as_ref(), value).await
+      (self.raw)(self.context.clone(), value).await
     }
 }
 
-pub fn async_context<CT : Sync + Send + 'static,VT: Send + 'static, RT: Send + 'static, ET: Send + 'static, FT : Future<Output = Result<RT,ET>> + Send + 'static, F: Fn(&CT, VT) -> FT + Sync + Send + 'static>(c : Arc<CT>, f : F) -> AsyncPipeline<VT,RT,ET> {
+pub fn async_context<CT : Clone + Sync + Send + 'static,VT: Send + 'static, RT: Send + 'static, ET: Send + 'static, FT : Future<Output = Result<RT,ET>> + Send + 'static, F: Fn(CT, VT) -> FT + Sync + Send + 'static>(c : CT, f : F) -> AsyncPipeline<VT,RT,ET> {
   return AsyncPipeline::new(SimpleAsyncPipelineWithContext{
     context: c,
     raw: Arc::new(f),
