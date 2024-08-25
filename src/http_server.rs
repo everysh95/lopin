@@ -1,13 +1,15 @@
-use std::{borrow::Borrow, collections::HashMap, convert::Infallible, error::Error};
+use std::{collections::HashMap, convert::Infallible, error::Error};
 
 use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Request, Response};
+use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Response};
 use hyper_util::rt::TokioIo;
 use regex::Regex;
 use tokio::net::TcpListener;
 use async_trait::async_trait;
 use serde_urlencoded::from_str;
+
+pub use hyper::Request;
 
 struct HttpServer {
   address: String
