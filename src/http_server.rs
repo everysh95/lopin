@@ -43,6 +43,9 @@ pub fn http_server(address: &str) -> AsyncFramework<Request<HttpContext<Bytes>>,
   })
 }
 
+pub type HttpResponse = Response<Full<Bytes>>;
+// pub type HttpAsyncPipeline<VT,RT> = AsyncPipeline<Request<HttpContext<VT>>, RT, HttpResponse>;
+
 #[derive(Debug)]
 pub struct HttpContext<T> {
   pub params: HashMap<String,String>,
@@ -87,6 +90,7 @@ pub fn http_delete<T: Clone + 'static>() -> Pipeline<Request<HttpContext<T>>, Re
 pub fn http_error<T: Clone + 'static>(status: u16, message: &'static str) -> Result<T, Response<Full<Bytes>>> {
   Err(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
 }
+
 
 struct ToByte;
 
