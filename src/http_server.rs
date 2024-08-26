@@ -93,6 +93,10 @@ pub fn http_error<T: Clone + 'static>(status: u16, message: &'static str) -> Res
   Err(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
 }
 
+pub fn http_ok<ET: Clone + 'static>(status: u16, message: &'static str) -> Result<Response<Full<Bytes>>, ET> {
+  Ok(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
+}
+
 
 struct ToByte;
 
