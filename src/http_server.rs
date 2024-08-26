@@ -97,6 +97,10 @@ pub fn http_ok<ET: Clone + 'static>(status: u16, message: &'static str) -> Resul
   Ok(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
 }
 
+pub fn http_text<ET: Clone + 'static>(status: u16, message: String) -> Result<Response<Full<Bytes>>, ET> {
+  Ok(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
+}
+
 pub fn set_header(key: &'static str, value: &'static str) -> Pipeline<Response<Full<Bytes>>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
   pipeline(move |r: Response<Full<Bytes>>| {
     let mut r = r.clone();
