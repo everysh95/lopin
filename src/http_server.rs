@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::Infallible, error::Error};
 
 use crate::{filter, pipeline, util::from_utf8, AsyncFramework, AsyncPipeline, Pipeline, RawAsyncFramework, RawAsyncPipeline};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::{Body, Bytes, Incoming}, server::conn::http1, service::service_fn, Method, Response};
+use hyper::{body::{Body, Bytes, Incoming}, header::HeaderValue, server::conn::http1, service::service_fn, Method, Response};
 use hyper_util::rt::TokioIo;
 use regex::Regex;
 use tokio::net::TcpListener;
@@ -97,6 +97,13 @@ pub fn http_ok<ET: Clone + 'static>(status: u16, message: &'static str) -> Resul
   Ok(Response::builder().status(status).body(Full::new(Bytes::from(message))).unwrap())
 }
 
+pub fn set_header(key: &'static str, value: &'static str) -> Pipeline<Response<Full<Bytes>>,Response<Full<Bytes>>,Response<Full<Bytes>>> {
+  pipeline(move |r: Response<Full<Bytes>>| {
+    let mut r = r.clone();
+    r.headers_mut().insert(key, HeaderValue::from_str(value).unwrap());
+    Ok(r)
+  })
+}
 
 struct ToByte;
 
