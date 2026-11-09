@@ -4,15 +4,8 @@
 //!
 
 mod core;
-mod async_core;
-pub mod util;
-pub mod testing;
-pub mod json;
-pub mod http_server;
-pub mod command;
 
 pub use core::*;
-pub use async_core::*;
 
 #[cfg(test)]
 mod tests {
@@ -20,54 +13,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        testing::test_ok(10, 10) ^ filter(|_| true, 0);
+    fn it_works_01() {
+        let mut s1 :Store<String> = Store::new();
+        let mut s2 :Store<String> = Store::new();
+        s1.insert_next(&String::from("test01"));
+        s1.insert_next(&String::from("test02"));
+        s1.insert_next(&String::from("test03"));
+
+        s2.insert_next(&String::from("test01-02"));
+        s2.insert_next(&String::from("test02-02"));
+        s2.insert_next(&String::from("test03-02"));
+
+        let s3 = s1.clone() & op_where(|x| x == "test02") & s2.clone() ^ op_set(|_v| String::from("testtest")) ^ s2.clone();
+        assert_eq!(s3.select(2),Some(String::from("testtest")));
     }
+
     #[test]
-    fn it_works2() {
-        testing::test_error(10, 0) ^ filter(|_| false, 0);
+    fn it_works_02() {
+        let mut s1 :Store<String> = Store::new();
+        let mut s2 :Store<String> = Store::new();
+        s1.insert_next(&String::from("test01"));
+        s1.insert_next(&String::from("test02"));
+        s1.insert_next(&String::from("test03"));
+
+        s2.insert_next(&String::from("test01"));
+        s2.insert_next(&String::from("test02"));
+        s2.insert_next(&String::from("test03"));
+
+        for (r1,r2) in s1.get_values().iter().zip(s2.get_values().iter()) {
+            assert_eq!(r1,r2);
+        }
     }
+
     #[test]
-    fn it_works3() {
-        testing::test_ok::<_,_,String>(10, "10".to_string()) ^ pipeline(|v : i32| Ok(v.to_string()));
+    fn it_works_03() {
+        let mut s1 :Store<String> = Store::new();
+        let mut s2 :Store<String> = Store::new();
+        s1.insert_next(&String::from("test01"));
+        s1.insert_next(&String::from("test02"));
+        s1.insert_next(&String::from("test03"));
+
+        s2.insert_next(&String::from("test01-02"));
+        s2.insert_next(&String::from("test02-02"));
+        s2.insert_next(&String::from("test03-02"));
+
+        s2 ^= s1.clone() & op_where(|x| x == "test02") & s2.clone() ^ op_set(|_v| String::from("testtest"));
+        assert_eq!(s2.select(1),Some(String::from("test01-02")));
+        assert_eq!(s2.select(2),Some(String::from("testtest")));
+        assert_eq!(s2.select(3),Some(String::from("test03-02")));
     }
+
     #[test]
-    fn it_works4() {
-        testing::test_error::<_,i32,_>(10, 0) ^ pipeline(|_| Err(0));
+    fn it_works_04() {
+        let mut s1 :Store<String> = Store::new();
+        let mut s2 :Store<String> = Store::new();
+        s1.insert_next(&String::from("test01"));
+        s1.insert_next(&String::from("test02"));
+        s1.insert_next(&String::from("test03"));
+
+        s2.insert_next(&String::from("test01-02"));
+        s2.insert_next(&String::from("test02-02"));
+        s2.insert_next(&String::from("test03-02"));
+
+        s2 ^= op_set(|_v| String::from("testtest"));
+        assert_eq!(s2.select(1),Some(String::from("testtest")));
+        assert_eq!(s2.select(2),Some(String::from("testtest")));
+        assert_eq!(s2.select(3),Some(String::from("testtest")));
     }
-    #[test]
-    fn it_works5() {
-        let pipeline  = filter(|_| true, 1) & filter(|_| true, 2);
-        testing::test_ok(10, 10) ^ pipeline;
-    }
-    #[test]
-    fn it_works6() {
-        let pipeline  = filter(|_| false, 1) & filter(|_| true, 2);
-        testing::test_error(10, 1) ^ pipeline;
-    }
-    #[test]
-    fn it_works7() {
-        let pipeline  = filter(|_| true, 1) & filter(|_| false, 2);
-        testing::test_error(10, 2) ^ pipeline;
-    }
-    #[test]
-    fn it_works8() {
-        let pipeline  = filter(|_| true, 1) | filter(|_| false, 2);
-        testing::test_ok(10, 10) ^ pipeline;
-    }
-    #[test]
-    fn it_works9() {
-        let pipeline  = filter(|_| true, 1) | filter(|_| false, 2);
-        testing::test_ok(10, 10) ^ pipeline;
-    }
-    #[test]
-    fn it_works10() {
-        let pipeline  = filter(|v| v % 2 == 0, 1) & pipeline(|v| Ok(v / 2)) | pipeline(|v| Ok(v) );
-        testing::test_ok(10, 5) ^ pipeline;
-    }
-    #[test]
-    fn it_works11() {
-        let pipeline  = filter(|v| v % 2 == 0, 1) & pipeline(|v| Ok(v / 2)) | pipeline(|v| Ok(v) );
-        testing::test_ok(9, 9) ^ pipeline;
-    }
+
 }
