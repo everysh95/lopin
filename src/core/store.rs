@@ -1,7 +1,5 @@
 use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign};
 
-use serde::Serialize;
-
 #[derive(Debug, Clone)]
 pub struct StoreItem<ValueType: Clone> {
     id: usize,
