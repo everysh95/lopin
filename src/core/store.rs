@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign};
+use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign, Not };
 
 #[derive(Debug, Clone)]
 pub struct StoreItem<ValueType: Clone> {
@@ -91,6 +91,9 @@ impl<ValueType: Clone> Store<ValueType> {
     pub fn get_values(self: &Self) -> Vec<ValueType> {
         self.values.iter().map(|v| v.get_value()).collect()
     }
+    pub fn get_max_id(self: &Self) -> usize {
+        self.max_id
+    }
 }
 
 impl Store<usize> {
@@ -107,6 +110,13 @@ impl Store<usize> {
             .map(|v| StoreItem::create(v.get_value(), &v.get_id()))
             .collect();
         Store { max_id, values }
+    }
+}
+
+impl Not for Store<usize> {
+    type Output = Store<usize>;
+    fn not(self) -> Self::Output {
+        self.revase()
     }
 }
 
@@ -177,6 +187,25 @@ impl BitOr<IDList> for IDList {
     }
 }
 
+impl<LVT: Clone> BitOr<(usize,LVT)> for Store<LVT> {
+    type Output = Store<LVT>;
+    fn bitor(self, rhs: (usize,LVT)) -> Self::Output {
+        let mut result = self.clone();
+        let (id,value) = rhs;
+        let _ = result.insert(id, &value);
+        result
+    }
+}
+
+impl<LVT: Clone> BitOr<Option<LVT>> for Store<LVT> {
+    type Output = Store<LVT>;
+    fn bitor(self, rhs: Option<LVT>) -> Self::Output {
+        match rhs {
+            Some(rhs) => self.clone() | (self.max_id + 1, rhs),
+            None => self
+        }
+    }
+}
 
 impl<LVT: Clone,F:Fn(LVT) -> LVT> BitXor<Box<F>> for Store<LVT> {
     type Output = Store<LVT>;
