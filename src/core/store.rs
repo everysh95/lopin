@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign, Not, Shl, ShlAssign, Shr };
+use std::ops::{BitAnd, BitOr, Not, Shl, ShlAssign, Shr };
 
 #[derive(Debug, Clone)]
 pub struct StoreItem<ValueType: Clone> {

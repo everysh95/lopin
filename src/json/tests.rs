@@ -19,8 +19,8 @@ fn it_works_02() {
     | Some("test02".to_string())
     | Some("test03".to_string())
     ;
-    let ss = s2.write_json_file("./testdoc/test.json").unwrap();
-    let s3 : Store<String> = Store::read_json_file("./testdoc/test.json").unwrap();
+    let _ss = s2.write_json_file("./testdoc/test.json").unwrap();
+    let _s3 : Store<String> = Store::read_json_file("./testdoc/test.json").unwrap();
 }
 
 #[test]
@@ -29,6 +29,6 @@ fn it_works_03() {
     | Some(Store::new() | Some("test01".to_string()) | Some("test02".to_string()) | Some("test03".to_string()))
     | Some(Store::new() | Some("test01-02".to_string()) | Some("test02-02".to_string()))
     ;
-    let ss = s2.write_json_file("./testdoc/test2.json").unwrap();
-    let s3 : Store<String> = Store::read_json_file("./testdoc/test2.json").unwrap();
+    let _ss = s2.write_json_file("./testdoc/test2.json").unwrap();
+    let _s3 : Store<Store<String>> = Store::read_json_file("./testdoc/test2.json").unwrap();
 }
