@@ -13,8 +13,8 @@ fn it_works_01() {
     s2.insert_next(&String::from("test03-02"));
 
     let s3 = s1.clone() & op_where(|x| x == "test02") & s2.clone()
-        ^ op_set(|_v| String::from("testtest"))
-        ^ s2.clone();
+        << op_set(|_v| String::from("testtest"))
+        >> s2.clone();
     assert_eq!(s3.select(2), Some(String::from("testtest")));
 }
 
@@ -47,8 +47,8 @@ fn it_works_03() {
     s2.insert_next(&String::from("test02-02"));
     s2.insert_next(&String::from("test03-02"));
 
-    s2 ^= s1.clone() & op_where(|x| x == "test02") & s2.clone()
-        ^ op_set(|_v| String::from("testtest"));
+    s2 <<= s1.clone() & op_where(|x| x == "test02") & s2.clone()
+        << op_set(|_v| String::from("testtest"));
     assert_eq!(s2.select(1), Some(String::from("test01-02")));
     assert_eq!(s2.select(2), Some(String::from("testtest")));
     assert_eq!(s2.select(3), Some(String::from("test03-02")));
@@ -66,7 +66,7 @@ fn it_works_04() {
     s2.insert_next(&String::from("test02-02"));
     s2.insert_next(&String::from("test03-02"));
 
-    s2 ^= op_set(|_v| String::from("testtest"));
+    s2 <<= op_set(|_v| String::from("testtest"));
     assert_eq!(s2.select(1), Some(String::from("testtest")));
     assert_eq!(s2.select(2), Some(String::from("testtest")));
     assert_eq!(s2.select(3), Some(String::from("testtest")));

@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign, Not };
+use std::ops::{BitAnd, BitOr, BitXor, BitXorAssign, Not, Shl, ShlAssign, Shr };
 
 #[derive(Debug, Clone)]
 pub struct StoreItem<ValueType: Clone> {
@@ -87,6 +87,9 @@ impl<ValueType: Clone> Store<ValueType> {
         } else {
             None
         }
+    }
+    pub fn get_ids(self: &Self) -> Vec<usize> {
+        self.values.iter().map(|v| v.get_id()).collect()
     }
     pub fn get_values(self: &Self) -> Vec<ValueType> {
         self.values.iter().map(|v| v.get_value()).collect()
@@ -207,9 +210,9 @@ impl<LVT: Clone> BitOr<Option<LVT>> for Store<LVT> {
     }
 }
 
-impl<LVT: Clone,F:Fn(LVT) -> LVT> BitXor<Box<F>> for Store<LVT> {
+impl<LVT: Clone,F:Fn(LVT) -> LVT> Shl<Box<F>> for Store<LVT> {
     type Output = Store<LVT>;
-    fn bitxor(self, rhs: Box<F>) -> Self::Output {
+    fn shl(self, rhs: Box<F>) -> Self::Output {
         let max_id = self.max_id;
         let values = self
             .values
@@ -220,9 +223,9 @@ impl<LVT: Clone,F:Fn(LVT) -> LVT> BitXor<Box<F>> for Store<LVT> {
     }
 }
 
-impl<LVT: Clone> BitXor<Store<LVT>> for Store<LVT> {
+impl<LVT: Clone> Shr<Store<LVT>> for Store<LVT> {
     type Output = Store<LVT>;
-    fn bitxor(self, rhs: Store<LVT>) -> Self::Output {
+    fn shr(self, rhs: Store<LVT>) -> Self::Output {
         let max_id = rhs.max_id;
         let values = rhs
             .values
@@ -235,18 +238,24 @@ impl<LVT: Clone> BitXor<Store<LVT>> for Store<LVT> {
         Store { max_id, values }
     }
 }
+impl<LVT: Clone> Shl<Store<LVT>> for Store<LVT> {
+    type Output = Store<LVT>;
+    fn shl(self, rhs: Store<LVT>) -> Self::Output {
+        rhs >> self
+    }
+}
 
-impl<LVT: Clone,F:Fn(LVT) -> LVT> BitXorAssign<Box<F>> for Store<LVT> {
-    fn bitxor_assign(&mut self, rhs: Box<F>) {
-        let res = self.clone() ^ rhs;
+impl<LVT: Clone,F:Fn(LVT) -> LVT> ShlAssign<Box<F>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Box<F>) {
+        let res = self.clone() << rhs;
         self.max_id = res.max_id;
         self.values = res.values;
     }
 }
 
-impl<LVT: Clone> BitXorAssign<Store<LVT>> for Store<LVT> {
-    fn bitxor_assign(&mut self, rhs: Store<LVT>) {
-        let res :Store<LVT> = rhs ^ self.clone();
+impl<LVT: Clone> ShlAssign<Store<LVT>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Store<LVT>) {
+        let res :Store<LVT> = rhs >> self.clone();
         self.max_id = res.max_id;
         self.values = res.values;
     }
