@@ -1,16 +1,8 @@
-use std::{collections::HashMap, ops::{BitOr, ShlAssign}};
+use std::{collections::HashMap, ops::{BitOr, ShlAssign}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Store, store};
-
-#[derive(Debug,Clone)]
-pub enum StoreAny {
-  IntStore(Store<i64>),
-  UintStore(Store<u64>),
-  FloatStore(Store<f64>),
-  StringStore(Store<String>)
-}
+use crate::{Store, TableAnyValue::{FloatValue, IntValue, StringValue, UintValue}, core::store::op_fn, store, op_values};
 
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
@@ -22,6 +14,63 @@ pub struct Table {
     col_name: HashMap<String, usize>,
     max_sid: usize,
     max_id: usize
+}
+
+
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub enum TableAnyValue {
+    IntValue(i64),
+    UintValue(u64),
+    FloatValue(f64),
+    StringValue(String)
+}
+
+impl Table {
+    pub fn select(self: &Self, id: usize) -> Store<Option<TableAnyValue>> {
+        let mut values: Store<Option<TableAnyValue>> = store();
+        for sid in self.int_store.get_ids() {
+            values = values | (sid,self.int_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::IntValue(v))))
+        }
+        for sid in self.uint_store.get_ids() {
+            values = values | (sid,self.uint_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::UintValue(v))))
+        }
+        for sid in self.float_store.get_ids() {
+            values = values | (sid,self.float_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::FloatValue(v))))
+        }
+        for sid in self.str_store.get_ids() {
+            values = values | (sid,self.str_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::StringValue(v))))
+        }
+        for sid in (0..self.max_sid).map(|i| i + 1) {
+            if values.get_ids().iter().all(|ri| ri != &sid) {
+                values = values | (sid,None)
+            }
+        }
+        values
+    }
+    pub fn view(self: &Self) -> Store<Store<Option<TableAnyValue>>> {
+        let mut vtable : Store<Store<Option<TableAnyValue>>> = store();
+        for id in (0..self.max_id).map(|i| i + 1) {
+            vtable = vtable | (id, self.select(id))
+        }
+        vtable
+    }
+}
+
+pub fn to_json_value(v: Option<TableAnyValue>) -> serde_json::Value {
+    match v {
+        Some(v) => match v {
+            IntValue(v) => serde_json::Value::Number(v.into()),
+            UintValue(v) => serde_json::Value::Number(v.into()),
+            FloatValue(v) => serde_json::Value::Number(serde_json::Number::from_f64(v).unwrap()),
+            StringValue(v) => serde_json::Value::String(v.clone()),
+        },
+        None => serde_json::Value::Null
+    }
+}
+
+pub fn json_value() -> Arc<dyn Fn(Option<TableAnyValue>) -> serde_json::Value>
+{
+    op_fn(|v| to_json_value(v))
 }
 
 impl BitOr<(String, Store<i64>)> for Table {
@@ -98,14 +147,6 @@ pub fn col_float(name: &str) -> (String, Store<f64>) {
 
 pub fn col_str(name: &str) -> (String, Store<String>) {
     (name.to_string(), Store::new())
-}
-
-#[derive(Debug,Clone)]
-pub enum TableAnyValue {
-    IntValue(i64),
-    UintValue(u64),
-    FloatValue(f64),
-    StringValue(String)
 }
 
 impl BitOr<(&str,i64)> for Store<(String,TableAnyValue)>
@@ -212,7 +253,7 @@ impl BitOr<&str> for Store<TableAnyValue>
 impl ShlAssign<Store<TableAnyValue>> for Table {
     fn shl_assign(&mut self, rhs: Store<TableAnyValue>) {
         self.max_id = self.max_id + 1;
-        for id in rhs.get_ids().iter().cloned() {
+        for id in rhs.get_ids() {
             let value = rhs.select(id).unwrap();
             match value {
                 TableAnyValue::IntValue(v) => {

@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitOr, Not, Shl, ShlAssign, Shr };
+use std::{ops::{BitAnd, BitOr, Not, Shl, ShlAssign, Shr }, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct StoreItem<ValueType: Clone> {
@@ -32,16 +32,34 @@ pub struct IDList {
     ids: Vec<usize>,
 }
 
-pub fn op_where<LVT: Clone,F:Fn(LVT) -> bool>(f : F) -> Box<F> {
-    Box::new(f)
+pub fn op_where<LVT: Clone,F:Fn(LVT) -> bool>(f : F) -> Arc<F> {
+    Arc::new(f)
 }
 
-pub fn op_set<LVT: Clone,F:Fn(LVT) -> LVT>(f : F) -> Box<F> {
-    Box::new(f)
+pub fn op_set<LVT: Clone,F:Fn(LVT) -> LVT + 'static>(f : F) -> Arc<dyn Fn(LVT) -> LVT> {
+    Arc::new(f)
+}
+
+pub fn op_fn<LVT: Clone,RVT: Clone,F:Fn(LVT) -> RVT + 'static>(f : F) -> Arc<dyn Fn(LVT) -> RVT> {
+    Arc::new(f)
+}
+
+pub fn op_map<LVT: Clone + 'static,RVT: Clone + 'static>(rf : Arc<dyn Fn(LVT) -> RVT>) -> Arc<dyn Fn(Store<LVT>) -> Store<RVT>> {
+    op_fn(move |s| s << rf.clone())
 }
 
 pub fn store<LVT: Clone>() -> Store<LVT> {
     Store::new()
+}
+
+pub struct OpValues;
+
+pub fn op_values() -> OpValues {
+    OpValues
+}
+
+pub fn map_values<LVT: Clone>() -> Arc<dyn Fn(Store<LVT>) -> Vec<LVT>> {
+    op_fn(|s| s & op_values())
 }
 
 pub enum StoreError {
@@ -140,9 +158,9 @@ impl<LVT: Clone, RVT: Clone> BitAnd<Store<RVT>> for Store<LVT> {
     }
 }
 
-impl<LVT: Clone,F:Fn(LVT) -> bool> BitAnd<Box<F>> for Store<LVT> {
+impl<LVT: Clone,F:Fn(LVT) -> bool> BitAnd<Arc<F>> for Store<LVT> {
     type Output = IDList;
-    fn bitand(self, rhs: Box<F>) -> Self::Output {
+    fn bitand(self, rhs: Arc<F>) -> Self::Output {
         let ids = self
             .values
             .iter()
@@ -173,6 +191,21 @@ impl<RVT: Clone> BitAnd<Store<RVT>> for IDList {
         rhs & self
     }
 }
+
+impl<LVT: Clone> BitAnd<OpValues> for Store<LVT> {
+    type Output = Vec<LVT>;
+    fn bitand(self, _: OpValues) -> Self::Output {
+        self.get_values()
+    }
+}
+
+impl<RVT: Clone> BitAnd<Store<RVT>> for OpValues {
+    type Output = Vec<RVT>;
+    fn bitand(self, rhs: Store<RVT>) -> Self::Output {
+        rhs & self
+    }
+}
+
 
 impl<LVT: Clone, RVT: Clone> BitOr<Store<RVT>> for Store<LVT> {
     type Output = IDList;
@@ -214,9 +247,9 @@ impl<LVT: Clone> BitOr<Option<LVT>> for Store<LVT> {
     }
 }
 
-impl<LVT: Clone,F:Fn(LVT) -> LVT> Shl<Box<F>> for Store<LVT> {
-    type Output = Store<LVT>;
-    fn shl(self, rhs: Box<F>) -> Self::Output {
+impl<LVT: Clone,RVT: Clone> Shl<Arc<dyn Fn(LVT) -> RVT>> for Store<LVT> {
+    type Output = Store<RVT>;
+    fn shl(self, rhs: Arc<dyn Fn(LVT) -> RVT>) -> Self::Output {
         let max_id = self.max_id;
         let values = self
             .values
@@ -249,8 +282,8 @@ impl<LVT: Clone> Shl<Store<LVT>> for Store<LVT> {
     }
 }
 
-impl<LVT: Clone,F:Fn(LVT) -> LVT> ShlAssign<Box<F>> for Store<LVT> {
-    fn shl_assign(&mut self, rhs: Box<F>) {
+impl<LVT: Clone> ShlAssign<Arc<dyn Fn(LVT) -> LVT>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Arc<dyn Fn(LVT) -> LVT>) {
         let res = self.clone() << rhs;
         self.max_id = res.max_id;
         self.values = res.values;
