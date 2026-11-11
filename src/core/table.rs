@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::{BitOr, ShlAssign}};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Store;
+use crate::{Store, store};
 
 #[derive(Debug,Clone)]
 pub enum StoreAny {
@@ -101,90 +101,75 @@ pub fn col_str(name: &str) -> (String, Store<String>) {
 }
 
 #[derive(Debug,Clone)]
-enum TableAnyValue {
+pub enum TableAnyValue {
     IntValue(i64),
     UintValue(u64),
     FloatValue(f64),
     StringValue(String)
 }
 
-#[derive(Debug,Clone)]
-pub struct NamedValues
+impl BitOr<(&str,i64)> for Store<(String,TableAnyValue)>
 {
-    map: HashMap<String,TableAnyValue>
-}
-
-pub fn named() -> NamedValues
-{
-    NamedValues { map: HashMap::new() }
-}
-
-impl BitOr<(&str,i64)> for NamedValues
-{
-    type Output = NamedValues;
+    type Output = Store<(String,TableAnyValue)>;
     fn bitor(self, rhs: (&str,i64)) -> Self::Output {
-        let mut res = self.clone();
-        let (k,v)= rhs;
-        res.map.insert(k.to_string(), TableAnyValue::IntValue(v));
-        res
+        let (k,v) = rhs;
+        self | Some((k.to_string(), TableAnyValue::IntValue(v)))
     }
 }
-impl BitOr<(&str,u64)> for NamedValues
+impl BitOr<(&str,u64)> for Store<(String,TableAnyValue)>
 {
-    type Output = NamedValues;
+    type Output = Store<(String,TableAnyValue)>;
     fn bitor(self, rhs: (&str,u64)) -> Self::Output {
-        let mut res = self.clone();
-        let (k,v)= rhs;
-        res.map.insert(k.to_string(), TableAnyValue::UintValue(v));
-        res
-    }
-}
-impl BitOr<(&str,f64)> for NamedValues
-{
-    type Output = NamedValues;
-    fn bitor(self, rhs: (&str,f64)) -> Self::Output {
-        let mut res = self.clone();
-        let (k,v)= rhs;
-        res.map.insert(k.to_string(), TableAnyValue::FloatValue(v));
-        res
-    }
-}
-impl BitOr<(&str,&str)> for NamedValues
-{
-    type Output = NamedValues;
-    fn bitor(self, rhs: (&str,&str)) -> Self::Output {
-        let mut res = self.clone();
-        let (k,v)= rhs;
-        res.map.insert(k.to_string(), TableAnyValue::StringValue(v.to_string()));
-        res
+        let (k,v) = rhs;
+        self | Some((k.to_string(), TableAnyValue::UintValue(v)))
     }
 }
 
-impl ShlAssign<NamedValues> for Table {
-    fn shl_assign(&mut self, rhs: NamedValues) {
+impl BitOr<(&str,f64)> for Store<(String,TableAnyValue)>
+{
+    type Output = Store<(String,TableAnyValue)>;
+    fn bitor(self, rhs: (&str,f64)) -> Self::Output {
+        let (k,v) = rhs;
+        self | Some((k.to_string(), TableAnyValue::FloatValue(v)))
+    }
+}
+
+impl BitOr<(&str,&str)> for Store<(String,TableAnyValue)>
+{
+    type Output = Store<(String,TableAnyValue)>;
+    fn bitor(self, rhs: (&str,&str)) -> Self::Output {
+        let (k,v) = rhs;
+        self | Some((k.to_string(), TableAnyValue::StringValue(v.to_string())))
+    }
+}
+
+impl ShlAssign<Store<(String,TableAnyValue)>> for Table {
+    fn shl_assign(&mut self, rhs: Store<(String,TableAnyValue)>) {
         self.max_id = self.max_id + 1;
-        for (name,value) in rhs.map.iter() {
+        for index in 0..rhs.get_max_id() {
+            let kv = rhs.select(index + 1).unwrap();
+            let (name,value) = kv;
             match value {
                 TableAnyValue::IntValue(v) => {
-                    let id = self.col_name.get(name).unwrap().clone();
+                    let id = self.col_name.get(&name).unwrap().clone();
                     let mut s = self.int_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
                     self.int_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::UintValue(v) => {
-                    let id = self.col_name.get(name).unwrap().clone();
+                    let id = self.col_name.get(&name).unwrap().clone();
                     let mut s = self.uint_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
                     self.uint_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::FloatValue(v) => {
-                    let id = self.col_name.get(name).unwrap().clone();
+                    let id = self.col_name.get(&name).unwrap().clone();
                     let mut s = self.float_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
                     self.float_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::StringValue(v) => {
-                    let id = self.col_name.get(name).unwrap().clone();
+                    let id = self.col_name.get(&name).unwrap().clone();
                     let mut s = self.str_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
                     self.str_store <<= Store::new() | (id,s);
@@ -193,82 +178,62 @@ impl ShlAssign<NamedValues> for Table {
         }
     }
 }
-
-#[derive(Debug,Clone)]
-pub struct TableRow
+impl BitOr<i64> for Store<TableAnyValue>
 {
-    vec: Vec<TableAnyValue>
-}
-
-pub fn values() -> TableRow {
-    TableRow { vec: vec![] }
-}
-
-
-
-impl BitOr<i64> for TableRow
-{
-    type Output = TableRow;
+    type Output = Store<TableAnyValue>;
     fn bitor(self, rhs: i64) -> Self::Output {
-        let mut res = self.clone();
-        res.vec.push(TableAnyValue::IntValue(rhs));
-        res
+        self | Some(TableAnyValue::IntValue(rhs))
     }
 }
-impl BitOr<u64> for TableRow
+impl BitOr<u64> for Store<TableAnyValue>
 {
-    type Output = TableRow;
+    type Output = Store<TableAnyValue>;
     fn bitor(self, rhs: u64) -> Self::Output {
-        let mut res = self.clone();
-        res.vec.push(TableAnyValue::UintValue(rhs));
-        res
+        self | Some(TableAnyValue::UintValue(rhs))
     }
 }
 
-impl BitOr<f64> for TableRow
+impl BitOr<f64> for Store<TableAnyValue>
 {
-    type Output = TableRow;
+    type Output = Store<TableAnyValue>;
     fn bitor(self, rhs: f64) -> Self::Output {
-        let mut res = self.clone();
-        res.vec.push(TableAnyValue::FloatValue(rhs));
-        res
+        self | Some(TableAnyValue::FloatValue(rhs))
     }
 }
 
-impl BitOr<&str> for TableRow
+impl BitOr<&str> for Store<TableAnyValue>
 {
-    type Output = TableRow;
+    type Output = Store<TableAnyValue>;
     fn bitor(self, rhs: &str) -> Self::Output {
-        let mut res = self.clone();
-        res.vec.push(TableAnyValue::StringValue(rhs.to_string()));
-        res
+        self | Some(TableAnyValue::StringValue(rhs.to_string()))
     }
 }
 
-impl ShlAssign<TableRow> for Table {
-    fn shl_assign(&mut self, rhs: TableRow) {
+impl ShlAssign<Store<TableAnyValue>> for Table {
+    fn shl_assign(&mut self, rhs: Store<TableAnyValue>) {
         self.max_id = self.max_id + 1;
-        for (index,value) in (0..self.max_sid).zip(rhs.vec.iter()) {
+        for id in rhs.get_ids().iter().cloned() {
+            let value = rhs.select(id).unwrap();
             match value {
                 TableAnyValue::IntValue(v) => {
-                    let mut s = self.int_store.select(index + 1).unwrap();
+                    let mut s = self.int_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
-                    self.int_store <<= Store::new() | (index + 1,s);
+                    self.int_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::UintValue(v) => {
-                    let mut s = self.uint_store.select(index + 1).unwrap();
+                    let mut s = self.uint_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
-                    self.uint_store <<= Store::new() | (index + 1,s);
+                    self.uint_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::FloatValue(v) => {
-                    let mut s = self.float_store.select(index + 1).unwrap();
+                    let mut s = self.float_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
-                    self.float_store <<= Store::new() | (index + 1,s);
+                    self.float_store <<= Store::new() | (id,s);
                 },
                 TableAnyValue::StringValue(v) => {
-                    let mut s = self.str_store.select(index + 1).unwrap();
+                    let mut s = self.str_store.select(id).unwrap();
                     s = s | (self.max_id,v.clone());
-                    self.str_store <<= Store::new() | (index + 1,s);
+                    self.str_store <<= Store::new() | (id,s);
                 },
             };
         }

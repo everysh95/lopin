@@ -40,6 +40,10 @@ pub fn op_set<LVT: Clone,F:Fn(LVT) -> LVT>(f : F) -> Box<F> {
     Box::new(f)
 }
 
+pub fn store<LVT: Clone>() -> Store<LVT> {
+    Store::new()
+}
+
 pub enum StoreError {
     Unknown,
     DuplicateInsert,
