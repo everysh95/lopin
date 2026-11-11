@@ -109,19 +109,19 @@ enum TableAnyValue {
 }
 
 #[derive(Debug,Clone)]
-pub struct RowMap
+pub struct NamedValues
 {
     map: HashMap<String,TableAnyValue>
 }
 
-pub fn named() -> RowMap
+pub fn named() -> NamedValues
 {
-    RowMap { map: HashMap::new() }
+    NamedValues { map: HashMap::new() }
 }
 
-impl BitOr<(&str,i64)> for RowMap
+impl BitOr<(&str,i64)> for NamedValues
 {
-    type Output = RowMap;
+    type Output = NamedValues;
     fn bitor(self, rhs: (&str,i64)) -> Self::Output {
         let mut res = self.clone();
         let (k,v)= rhs;
@@ -129,9 +129,9 @@ impl BitOr<(&str,i64)> for RowMap
         res
     }
 }
-impl BitOr<(&str,u64)> for RowMap
+impl BitOr<(&str,u64)> for NamedValues
 {
-    type Output = RowMap;
+    type Output = NamedValues;
     fn bitor(self, rhs: (&str,u64)) -> Self::Output {
         let mut res = self.clone();
         let (k,v)= rhs;
@@ -139,9 +139,9 @@ impl BitOr<(&str,u64)> for RowMap
         res
     }
 }
-impl BitOr<(&str,f64)> for RowMap
+impl BitOr<(&str,f64)> for NamedValues
 {
-    type Output = RowMap;
+    type Output = NamedValues;
     fn bitor(self, rhs: (&str,f64)) -> Self::Output {
         let mut res = self.clone();
         let (k,v)= rhs;
@@ -149,9 +149,9 @@ impl BitOr<(&str,f64)> for RowMap
         res
     }
 }
-impl BitOr<(&str,&str)> for RowMap
+impl BitOr<(&str,&str)> for NamedValues
 {
-    type Output = RowMap;
+    type Output = NamedValues;
     fn bitor(self, rhs: (&str,&str)) -> Self::Output {
         let mut res = self.clone();
         let (k,v)= rhs;
@@ -160,8 +160,8 @@ impl BitOr<(&str,&str)> for RowMap
     }
 }
 
-impl ShlAssign<RowMap> for Table {
-    fn shl_assign(&mut self, rhs: RowMap) {
+impl ShlAssign<NamedValues> for Table {
+    fn shl_assign(&mut self, rhs: NamedValues) {
         self.max_id = self.max_id + 1;
         for (name,value) in rhs.map.iter() {
             match value {
@@ -195,29 +195,29 @@ impl ShlAssign<RowMap> for Table {
 }
 
 #[derive(Debug,Clone)]
-pub struct RowVec
+pub struct TableRow
 {
     vec: Vec<TableAnyValue>
 }
 
-pub fn values() -> RowVec {
-    RowVec { vec: vec![] }
+pub fn values() -> TableRow {
+    TableRow { vec: vec![] }
 }
 
 
 
-impl BitOr<i64> for RowVec
+impl BitOr<i64> for TableRow
 {
-    type Output = RowVec;
+    type Output = TableRow;
     fn bitor(self, rhs: i64) -> Self::Output {
         let mut res = self.clone();
         res.vec.push(TableAnyValue::IntValue(rhs));
         res
     }
 }
-impl BitOr<u64> for RowVec
+impl BitOr<u64> for TableRow
 {
-    type Output = RowVec;
+    type Output = TableRow;
     fn bitor(self, rhs: u64) -> Self::Output {
         let mut res = self.clone();
         res.vec.push(TableAnyValue::UintValue(rhs));
@@ -225,9 +225,9 @@ impl BitOr<u64> for RowVec
     }
 }
 
-impl BitOr<f64> for RowVec
+impl BitOr<f64> for TableRow
 {
-    type Output = RowVec;
+    type Output = TableRow;
     fn bitor(self, rhs: f64) -> Self::Output {
         let mut res = self.clone();
         res.vec.push(TableAnyValue::FloatValue(rhs));
@@ -235,9 +235,9 @@ impl BitOr<f64> for RowVec
     }
 }
 
-impl BitOr<&str> for RowVec
+impl BitOr<&str> for TableRow
 {
-    type Output = RowVec;
+    type Output = TableRow;
     fn bitor(self, rhs: &str) -> Self::Output {
         let mut res = self.clone();
         res.vec.push(TableAnyValue::StringValue(rhs.to_string()));
@@ -245,8 +245,8 @@ impl BitOr<&str> for RowVec
     }
 }
 
-impl ShlAssign<RowVec> for Table {
-    fn shl_assign(&mut self, rhs: RowVec) {
+impl ShlAssign<TableRow> for Table {
+    fn shl_assign(&mut self, rhs: TableRow) {
         self.max_id = self.max_id + 1;
         for (index,value) in (0..self.max_sid).zip(rhs.vec.iter()) {
             match value {
