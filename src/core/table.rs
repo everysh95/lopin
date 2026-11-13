@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::{BitOr, ShlAssign}, sync::Arc};
+use std::{collections::HashMap, ops::{BitAnd, BitOr, ShlAssign}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +55,154 @@ impl Table {
         vtable
     }
 }
+
+pub struct OpSelect(usize);
+
+pub fn select(id: usize) -> OpSelect{
+    OpSelect(id)
+}
+
+impl BitAnd<OpSelect> for Table {
+    type Output = Store<Option<TableAnyValue>>;
+    fn bitand(self, rhs: OpSelect) -> Self::Output {
+        let id =rhs.0;
+        let mut values: Store<Option<TableAnyValue>> = store();
+        for sid in self.int_store.get_ids() {
+            values = values | (sid,self.int_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::IntValue(v))))
+        }
+        for sid in self.uint_store.get_ids() {
+            values = values | (sid,self.uint_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::UintValue(v))))
+        }
+        for sid in self.float_store.get_ids() {
+            values = values | (sid,self.float_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::FloatValue(v))))
+        }
+        for sid in self.str_store.get_ids() {
+            values = values | (sid,self.str_store.select(sid).unwrap().select(id).and_then(|v| Some(TableAnyValue::StringValue(v))))
+        }
+        for sid in (0..self.max_sid).map(|i| i + 1) {
+            if values.get_ids().iter().all(|ri| ri != &sid) {
+                values = values | (sid,None)
+            }
+        }
+        values
+    }
+}
+
+impl BitAnd<Table> for OpSelect {
+    type Output = Store<Option<TableAnyValue>>;
+    fn bitand(self, rhs: Table) -> Self::Output {
+        rhs & self
+    } 
+}
+
+pub struct OpView;
+
+pub fn view() -> OpView {
+    OpView
+}
+
+impl BitAnd<OpView> for Table {
+    type Output = Store<Store<Option<TableAnyValue>>>;
+
+    fn bitand(self, _rhs : OpView) -> Self::Output {
+        let mut vtable : Store<Store<Option<TableAnyValue>>> = store();
+        for id in (0..self.max_id).map(|i| i + 1) {
+            vtable = vtable | (id, self.select(id))
+        }
+        vtable
+    }
+}
+
+impl BitAnd<Table> for OpView {
+    type Output = Store<Store<Option<TableAnyValue>>>;
+    
+    fn bitand(self, rhs: Table) -> Self::Output {
+        rhs & self
+    }
+}
+
+pub struct OpIntStore;
+
+pub fn int_store() -> OpIntStore {
+    OpIntStore
+}
+
+impl BitAnd<OpIntStore> for Table {
+    type Output = Store<Store<i64>>;
+    fn bitand(self, _ : OpIntStore) -> Self::Output {
+        self.int_store.clone()
+    }
+}
+
+impl BitAnd<Table> for OpIntStore {
+    type Output = Store<Store<i64>>;
+    fn bitand(self, rhs : Table) -> Self::Output {
+        rhs & self
+    }
+}
+
+pub struct OpUintStore;
+
+pub fn uint_store() -> OpUintStore {
+    OpUintStore
+}
+
+
+impl BitAnd<OpUintStore> for Table {
+    type Output = Store<Store<u64>>;
+    fn bitand(self, _ : OpUintStore) -> Self::Output {
+        self.uint_store.clone()
+    }
+}
+
+impl BitAnd<Table> for OpUintStore {
+    type Output = Store<Store<u64>>;
+    fn bitand(self, rhs : Table) -> Self::Output {
+        rhs & self
+    }
+}
+
+pub struct OpFloatStore;
+
+pub fn float_store() -> OpFloatStore {
+    OpFloatStore
+}
+
+impl BitAnd<OpFloatStore> for Table {
+    type Output = Store<Store<f64>>;
+    fn bitand(self, _ : OpFloatStore) -> Self::Output {
+        self.float_store.clone()
+    }
+}
+
+impl BitAnd<Table> for OpFloatStore {
+    type Output = Store<Store<f64>>;
+    fn bitand(self, rhs : Table) -> Self::Output {
+        rhs & self
+    }
+}
+
+pub struct OpStrStore;
+
+pub fn str_store() -> OpStrStore {
+    OpStrStore
+}
+
+impl BitAnd<OpStrStore> for Table {
+    type Output = Store<Store<String>>;
+    fn bitand(self, _ : OpStrStore) -> Self::Output {
+        self.str_store.clone()
+    }
+}
+
+impl BitAnd<Table> for OpStrStore {
+    type Output = Store<Store<String>>;
+    fn bitand(self, rhs : Table) -> Self::Output {
+        rhs & self
+    }
+}
+
+
 
 pub fn to_json_value(v: Option<TableAnyValue>) -> serde_json::Value {
     match v {
