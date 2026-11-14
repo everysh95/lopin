@@ -1,18 +1,14 @@
 use std::{
     collections::HashMap,
     ops::{BitAnd, BitOr, ShlAssign},
-    sync::Arc,
 };
 
-use serde::{Deserialize, Serialize};
 
 use crate::{
-    core::store::op_fn,
     store, Store,
-    TableAnyValue::{FloatValue, IntValue, StringValue, UintValue},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Table {
     int_store: Store<Store<i64>>,
     uint_store: Store<Store<u64>>,
@@ -23,7 +19,7 @@ pub struct Table {
     max_id: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum TableAnyValue {
     IntValue(i64),
     UintValue(u64),
@@ -342,22 +338,6 @@ impl BitOr<Store<String>> for Table {
         }
         res
     }
-}
-
-pub fn to_json_value(v: Option<TableAnyValue>) -> serde_json::Value {
-    match v {
-        Some(v) => match v {
-            IntValue(v) => serde_json::Value::Number(v.into()),
-            UintValue(v) => serde_json::Value::Number(v.into()),
-            FloatValue(v) => serde_json::Value::Number(serde_json::Number::from_f64(v).unwrap()),
-            StringValue(v) => serde_json::Value::String(v.clone()),
-        },
-        None => serde_json::Value::Null,
-    }
-}
-
-pub fn json_value() -> Arc<dyn Fn(Option<TableAnyValue>) -> serde_json::Value> {
-    op_fn(|v| to_json_value(v))
 }
 
 impl BitOr<(String, Store<i64>)> for Table {

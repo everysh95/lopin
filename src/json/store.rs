@@ -1,8 +1,9 @@
-use std::{fs::File, io::{Read, Write}};
+use std::{fs::File, io::{Read, Write}, ops::{Shl, Shr}, sync::Arc};
 
 use serde::{
     Deserialize, Serialize, de::DeserializeOwned,
 };
+use serde_json::ser;
 
 use crate::Store;
 
@@ -64,3 +65,46 @@ impl<T: Clone + Serialize> Serialize for Store<T>
     }
 }
 
+pub struct OpJsonSave {
+    pub path: String
+}
+
+pub fn json_save(path: &str) -> OpJsonSave {
+    OpJsonSave { path: path.to_string() }
+}
+
+impl<T: Clone + Serialize> Shr<OpJsonSave> for Store<T> {
+   type Output = Store<T>; 
+   fn shr(self, rhs: OpJsonSave) -> Self::Output {
+        if let Ok(mut file) = File::create(rhs.path) {
+            if let Ok(text) = serde_json::to_string(&self) {
+                let _ = file.write(text.as_bytes());
+            }
+        }
+        self
+   }
+}
+
+pub struct OpJsonLoad {
+    pub path: String
+}
+
+pub fn json_load(path: &str) -> OpJsonLoad {
+    OpJsonLoad { path: path.to_string() }
+}
+
+impl<T: Clone + DeserializeOwned> Shl<OpJsonLoad> for Store<T>{
+   type Output = Store<T>; 
+   fn shl(self, rhs: OpJsonLoad) -> Self::Output {
+        if let Ok(mut file) = File::open(rhs.path) {
+            let mut text = String::new();
+            let _ = file.read_to_string(&mut text);
+            let ps : Result<Store<T>,_> = serde_json::from_str(&text);
+            return match ps {
+                Ok(s) => self << s,
+                Err(_) => self
+            };
+        }
+        self
+   }
+}
