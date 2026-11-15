@@ -5,7 +5,7 @@ use serde::{
 };
 use serde_json::ser;
 
-use crate::Store;
+use crate::{Store, json::{OpJsonLoad, OpJsonSave}};
 
 impl<T: Clone + DeserializeOwned> Store<T> {
     pub fn read_json_file(path: &str) -> Result<Store<T>, ()> {
@@ -65,14 +65,6 @@ impl<T: Clone + Serialize> Serialize for Store<T>
     }
 }
 
-pub struct OpJsonSave {
-    pub path: String
-}
-
-pub fn json_save(path: &str) -> OpJsonSave {
-    OpJsonSave { path: path.to_string() }
-}
-
 impl<T: Clone + Serialize> Shr<OpJsonSave> for Store<T> {
    type Output = Store<T>; 
    fn shr(self, rhs: OpJsonSave) -> Self::Output {
@@ -83,14 +75,6 @@ impl<T: Clone + Serialize> Shr<OpJsonSave> for Store<T> {
         }
         self
    }
-}
-
-pub struct OpJsonLoad {
-    pub path: String
-}
-
-pub fn json_load(path: &str) -> OpJsonLoad {
-    OpJsonLoad { path: path.to_string() }
 }
 
 impl<T: Clone + DeserializeOwned> Shl<OpJsonLoad> for Store<T>{

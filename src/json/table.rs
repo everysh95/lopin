@@ -1,9 +1,9 @@
-use std::{fs::File, io::{Read, Write}, ops::{Shl, Shr}, sync::Arc};
+use std::{fs::{File, create_dir_all}, io::{Read, Write}, ops::{Shl, Shr}, path, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Store, Table, TableAnyValue::{self, FloatValue, IntValue, StringValue, UintValue}, col_names, float_store, int_store, json::{OpJsonLoad, OpJsonSave}, op_fn, str_store, table, uint_store,
+    Store, Table, TableAnyValue::{self, FloatValue, IntValue, StringValue, UintValue}, col_names, float_store, int_store, json::{OpJsonLoad, OpJsonSave, json_save}, op_fn, str_store, table, uint_store,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -87,6 +87,48 @@ impl Shl<OpJsonLoad> for Table {
                     | (s.clone() & str_store()),
                 Err(_) => self
             };
+        }
+        self
+    }
+}
+
+pub struct OpJsonSaveDir {
+    path: String
+}
+
+pub fn json_save_dir(path: &str) -> OpJsonSaveDir {
+    OpJsonSaveDir { path: path.to_string() }
+}
+
+
+impl Shr<OpJsonSaveDir> for Table {
+    type Output = Table;
+    fn shr(self, rhs: OpJsonSaveDir) -> Self::Output {
+        if create_dir_all(rhs.path.clone()).is_ok() {
+            let tis = self.clone() & int_store();
+            for sid in tis.get_ids() {
+                let path = format!("{}/i-{}.json",rhs.path,sid);
+                let _ = tis.select(sid).unwrap() >> json_save(&path) ;
+            }
+            let tus = self.clone() & uint_store();
+            for sid in tus.get_ids() {
+                let path = format!("{}/u-{}.json",rhs.path,sid);
+                let _ = tus.select(sid).unwrap() >> json_save(&path) ;
+            }
+            let tfs = self.clone() & float_store();
+            for sid in tfs.get_ids() {
+                let path = format!("{}/f-{}.json",rhs.path,sid);
+                let _ = tfs.select(sid).unwrap() >> json_save(&path) ;
+            }
+            let tss = self.clone() & str_store();
+            for sid in tss.get_ids() {
+                let path = format!("{}/s-{}.json",rhs.path,sid);
+                let _ = tss.select(sid).unwrap() >> json_save(&path) ;
+            }
+            {
+                let path = format!("{}/names.json",rhs.path);
+                let _ = (self.clone() & col_names()) >> json_save(&path);
+            }
         }
         self
     }
