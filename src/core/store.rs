@@ -32,11 +32,17 @@ pub struct IDList {
     ids: Vec<usize>,
 }
 
+impl IDList {
+    pub fn get_ids(self: &Self) -> Vec<usize> {
+        self.ids.clone()
+    }
+}
+
 pub fn op_where<LVT: Clone,F:Fn(LVT) -> bool>(f : F) -> Arc<F> {
     Arc::new(f)
 }
 
-pub fn op_set<LVT: Clone,F:Fn(LVT) -> LVT + 'static>(f : F) -> Arc<dyn Fn(LVT) -> LVT> {
+pub fn op_set<LVT: Clone,F:Fn(LVT) -> LVT>(f : F) -> Arc<F> {
     Arc::new(f)
 }
 
@@ -47,6 +53,7 @@ pub fn op_fn<LVT: Clone,RVT: Clone,F:Fn(LVT) -> RVT + 'static>(f : F) -> Arc<dyn
 pub fn op_map<LVT: Clone + 'static,RVT: Clone + 'static>(rf : Arc<dyn Fn(LVT) -> RVT>) -> Arc<dyn Fn(Store<LVT>) -> Store<RVT>> {
     op_fn(move |s| s << rf.clone())
 }
+
 
 pub fn store<LVT: Clone>() -> Store<LVT> {
     Store::new()
@@ -260,6 +267,19 @@ impl<LVT: Clone,RVT: Clone> Shl<Arc<dyn Fn(LVT) -> RVT>> for Store<LVT> {
     }
 }
 
+impl<LVT: Clone,RVT: Clone, F : Fn(LVT) -> RVT> Shl<Arc<F>> for Store<LVT> {
+    type Output = Store<RVT>;
+    fn shl(self, rhs: Arc<F>) -> Self::Output {
+        let max_id = self.max_id;
+        let values = self
+            .values
+            .iter()
+            .map(|lv| StoreItem::create(lv.get_id(), &(rhs(lv.get_value()))))
+            .collect();
+        Store { max_id, values }
+    }
+}
+
 impl<LVT: Clone> Shr<Store<LVT>> for Store<LVT> {
     type Output = Store<LVT>;
     fn shr(self, rhs: Store<LVT>) -> Self::Output {
@@ -284,6 +304,14 @@ impl<LVT: Clone> Shl<Store<LVT>> for Store<LVT> {
 
 impl<LVT: Clone> ShlAssign<Arc<dyn Fn(LVT) -> LVT>> for Store<LVT> {
     fn shl_assign(&mut self, rhs: Arc<dyn Fn(LVT) -> LVT>) {
+        let res = self.clone() << rhs;
+        self.max_id = res.max_id;
+        self.values = res.values;
+    }
+}
+
+impl<LVT: Clone,F: Fn(LVT) -> LVT> ShlAssign<Arc<F>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Arc<F>) {
         let res = self.clone() << rhs;
         self.max_id = res.max_id;
         self.values = res.values;

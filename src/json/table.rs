@@ -1,4 +1,4 @@
-use std::{fs::{File, create_dir_all}, io::{Read, Write}, ops::{Shl, Shr}, path, sync::Arc};
+use std::{fs::{File, create_dir_all}, io::{Read, Write}, ops::{Shl, Shr}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
@@ -15,19 +15,16 @@ struct Helper {
     col_name: Store<String>,
 }
 
-pub fn to_json_value(v: Option<TableAnyValue>) -> serde_json::Value {
+pub fn to_json_value(v: TableAnyValue) -> serde_json::Value {
     match v {
-        Some(v) => match v {
-            IntValue(v) => serde_json::Value::Number(v.into()),
-            UintValue(v) => serde_json::Value::Number(v.into()),
-            FloatValue(v) => serde_json::Value::Number(serde_json::Number::from_f64(v).unwrap()),
-            StringValue(v) => serde_json::Value::String(v.clone()),
-        },
-        None => serde_json::Value::Null,
+        IntValue(v) => serde_json::Value::Number(v.into()),
+        UintValue(v) => serde_json::Value::Number(v.into()),
+        FloatValue(v) => serde_json::Value::Number(serde_json::Number::from_f64(v).unwrap()),
+        StringValue(v) => serde_json::Value::String(v.clone()),
     }
 }
 
-pub fn json_value() -> Arc<dyn Fn(Option<TableAnyValue>) -> serde_json::Value> {
+pub fn json_value() -> Arc<dyn Fn(TableAnyValue) -> serde_json::Value> {
     op_fn(|v| to_json_value(v))
 }
 
@@ -38,7 +35,7 @@ impl<'de> Deserialize<'de> for Table {
     {
         let kv = Helper::deserialize(deserializer)?;
         let t =
-            table() | kv.col_name | kv.int_store | kv.uint_store | kv.float_store | kv.str_store;
+            table("") | kv.col_name | kv.int_store | kv.uint_store | kv.float_store | kv.str_store;
         Ok(t)
     }
 }

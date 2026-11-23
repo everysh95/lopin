@@ -1,25 +1,27 @@
-use std::{
-    collections::HashMap,
-    ops::{BitAnd, BitOr, ShlAssign},
-};
+use std::
+    ops::{BitAnd, BitOr, BitOrAssign, ShlAssign, }
+;
 
+
+use serde::de::value;
 
 use crate::{
-    store, Store,
+    Store, TableAnyValue::{FloatValue, IntValue, StringValue, UintValue}, op_fn, op_set, op_where, store,
 };
 
 #[derive(Debug, Clone)]
 pub struct Table {
+    table_name: String,
     int_store: Store<Store<i64>>,
     uint_store: Store<Store<u64>>,
     float_store: Store<Store<f64>>,
     str_store: Store<Store<String>>,
-    col_name: HashMap<String, usize>,
+    col_name: Store<String>,
     max_sid: usize,
     max_id: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum TableAnyValue {
     IntValue(i64),
     UintValue(u64),
@@ -27,62 +29,104 @@ pub enum TableAnyValue {
     StringValue(String),
 }
 
+impl PartialEq<i64> for TableAnyValue {
+    fn eq(&self, other: &i64) -> bool {
+        match self.clone() {
+           IntValue(v)  => &v == other,
+           _ => false
+        }
+    }
+}
+impl PartialEq<u64> for TableAnyValue {
+    fn eq(&self, other: &u64) -> bool {
+        match self.clone() {
+           UintValue(v)  => &v == other,
+           _ => false
+        }
+    }
+}
+impl PartialEq<f64> for TableAnyValue {
+    fn eq(&self, other: &f64) -> bool {
+        match self.clone() {
+           FloatValue(v)  => &v == other,
+           _ => false
+        }
+    }
+}
+impl PartialEq<String> for TableAnyValue {
+    fn eq(&self, other: &String) -> bool {
+        match self.clone() {
+           StringValue(v)  => &v == other,
+           _ => false
+        }
+    }
+}
+
+impl PartialEq<&str> for TableAnyValue {
+    fn eq(&self, other: &&str) -> bool {
+        self == &other.to_string()
+    }
+}
+
 impl Table {
-    pub fn select(self: &Self, id: usize) -> Store<Option<TableAnyValue>> {
-        let mut values: Store<Option<TableAnyValue>> = store();
+    pub fn select(self: &Self, id: usize) -> Store<TableAnyValue> {
+        let mut values: Store<TableAnyValue> = store();
         for sid in self.int_store.get_ids() {
             values = values
                 | (
                     sid,
-                    self.int_store
+                    IntValue(
+                        self.int_store
                         .select(sid)
                         .unwrap()
                         .select(id)
-                        .and_then(|v| Some(TableAnyValue::IntValue(v))),
+                        .unwrap(),
+                    )
                 )
         }
         for sid in self.uint_store.get_ids() {
             values = values
                 | (
                     sid,
-                    self.uint_store
+                    UintValue(
+                        self.uint_store
                         .select(sid)
                         .unwrap()
                         .select(id)
-                        .and_then(|v| Some(TableAnyValue::UintValue(v))),
+                        .unwrap(),
+                    )
                 )
         }
         for sid in self.float_store.get_ids() {
             values = values
                 | (
                     sid,
-                    self.float_store
+                    TableAnyValue::FloatValue(
+                        self.float_store
                         .select(sid)
                         .unwrap()
                         .select(id)
-                        .and_then(|v| Some(TableAnyValue::FloatValue(v))),
+                        .unwrap(),
+                    )
                 )
         }
         for sid in self.str_store.get_ids() {
             values = values
                 | (
                     sid,
-                    self.str_store
+                    TableAnyValue::StringValue(
+                        self.str_store
                         .select(sid)
                         .unwrap()
                         .select(id)
-                        .and_then(|v| Some(TableAnyValue::StringValue(v))),
+                        .unwrap()
+                    )
                 )
-        }
-        for sid in (0..self.max_sid).map(|i| i + 1) {
-            if values.get_ids().iter().all(|ri| ri != &sid) {
-                values = values | (sid, None)
-            }
         }
         values
     }
-    pub fn view(self: &Self) -> Store<Store<Option<TableAnyValue>>> {
-        let mut vtable: Store<Store<Option<TableAnyValue>>> = store();
+    pub fn view(self: &Self) -> Store<Store<TableAnyValue>> {
+        let mut vtable: Store<Store<TableAnyValue>> = store();
         for id in (0..self.max_id).map(|i| i + 1) {
             vtable = vtable | (id, self.select(id))
         }
@@ -97,14 +141,14 @@ pub fn select(id: usize) -> OpSelect {
 }
 
 impl BitAnd<OpSelect> for Table {
-    type Output = Store<Option<TableAnyValue>>;
+    type Output = Store<TableAnyValue>;
     fn bitand(self, rhs: OpSelect) -> Self::Output {
         self.select(rhs.0)
     }
 }
 
 impl BitAnd<Table> for OpSelect {
-    type Output = Store<Option<TableAnyValue>>;
+    type Output = Store<TableAnyValue>;
     fn bitand(self, rhs: Table) -> Self::Output {
         rhs & self
     }
@@ -117,7 +161,7 @@ pub fn view() -> OpView {
 }
 
 impl BitAnd<OpView> for Table {
-    type Output = Store<Store<Option<TableAnyValue>>>;
+    type Output = Store<Store<TableAnyValue>>;
 
     fn bitand(self, _rhs: OpView) -> Self::Output {
         self.view()
@@ -125,7 +169,7 @@ impl BitAnd<OpView> for Table {
 }
 
 impl BitAnd<Table> for OpView {
-    type Output = Store<Store<Option<TableAnyValue>>>;
+    type Output = Store<Store<TableAnyValue>>;
 
     fn bitand(self, rhs: Table) -> Self::Output {
         rhs & self
@@ -221,16 +265,31 @@ pub fn col_names() -> OpColNames {
 impl BitAnd<OpColNames> for Table {
     type Output = Store<String>;
     fn bitand(self, _rhs: OpColNames) -> Self::Output {
-        let mut result = store();
-        for (name, sid) in self.col_name.iter() {
-            result = result | (sid.clone(), name.clone());
-        }
-        result
+        self.col_name.clone()
     }
 }
 
 impl BitAnd<Table> for OpColNames {
     type Output = Store<String>;
+    fn bitand(self, rhs: Table) -> Self::Output {
+        rhs & self
+    }
+}
+pub struct OpTableName;
+
+pub fn table_name() -> OpTableName {
+    OpTableName
+}
+
+impl BitAnd<OpTableName> for Table {
+    type Output = String;
+    fn bitand(self, _rhs: OpTableName) -> Self::Output {
+        self.table_name.clone()
+    }
+}
+
+impl BitAnd<Table> for OpTableName {
+    type Output = String;
     fn bitand(self, rhs: Table) -> Self::Output {
         rhs & self
     }
@@ -330,11 +389,7 @@ impl BitOr<Store<String>> for Table {
             res.max_sid
         };
         for id in rhs.get_ids() {
-            let name = rhs.select(id).unwrap();
-            if !res.col_name.contains_key(&name) {
-                res.col_name.remove(&name);
-            }
-            res.col_name.insert(name, id);
+            res.col_name = res.col_name | (id, rhs.select(id).unwrap());
         }
         res
     }
@@ -346,7 +401,7 @@ impl BitOr<(String, Store<i64>)> for Table {
         let (name, store) = rhs;
         let mut result = self.clone();
         result.max_sid = self.max_sid + 1;
-        result.col_name.insert(name, result.max_sid);
+        result.col_name = result.col_name | (result.max_sid, name);
         result.int_store = result.int_store | (result.max_sid, store);
         result
     }
@@ -358,7 +413,7 @@ impl BitOr<(String, Store<u64>)> for Table {
         let (name, store) = rhs;
         let mut result = self.clone();
         result.max_sid = self.max_sid + 1;
-        result.col_name.insert(name, result.max_sid);
+        result.col_name = result.col_name | (result.max_sid, name);
         result.uint_store = result.uint_store | (result.max_sid, store);
         result
     }
@@ -370,7 +425,7 @@ impl BitOr<(String, Store<f64>)> for Table {
         let (name, store) = rhs;
         let mut result = self.clone();
         result.max_sid = self.max_sid + 1;
-        result.col_name.insert(name, result.max_sid);
+        result.col_name = result.col_name | (result.max_sid, name);
         result.float_store = result.float_store | (result.max_sid, store);
         result
     }
@@ -382,19 +437,20 @@ impl BitOr<(String, Store<String>)> for Table {
         let (name, store) = rhs;
         let mut result = self.clone();
         result.max_sid = self.max_sid + 1;
-        result.col_name.insert(name, result.max_sid);
+        result.col_name = result.col_name | (result.max_sid, name);
         result.str_store = result.str_store | (result.max_sid, store);
         result
     }
 }
 
-pub fn table() -> Table {
+pub fn table(name: &str) -> Table {
     Table {
+        table_name: name.to_string(),
         int_store: Store::new(),
         uint_store: Store::new(),
         float_store: Store::new(),
         str_store: Store::new(),
-        col_name: HashMap::new(),
+        col_name: Store::new(),
         max_id: 0,
         max_sid: 0,
     }
@@ -447,41 +503,51 @@ impl BitOr<(&str, &str)> for Store<(String, TableAnyValue)> {
     }
 }
 
-impl ShlAssign<Store<(String, TableAnyValue)>> for Table {
-    fn shl_assign(&mut self, rhs: Store<(String, TableAnyValue)>) {
+impl BitOrAssign<Store<(String, TableAnyValue)>> for Table {
+    fn bitor_assign(&mut self, rhs: Store<(String, TableAnyValue)>) {
         self.max_id = self.max_id + 1;
         for index in 0..rhs.get_max_id() {
             let kv = rhs.select(index + 1).unwrap();
             let (name, value) = kv;
             match value {
                 TableAnyValue::IntValue(v) => {
-                    let id = self.col_name.get(&name).unwrap().clone();
-                    let mut s = self.int_store.select(id).unwrap();
-                    s = s | (self.max_id, v.clone());
-                    self.int_store <<= Store::new() | (id, s);
+                    self.int_store <<= self.col_name.clone()
+                        & op_where(|s| &s == &name)
+                        & self.int_store.clone()
+                        << op_set(|s| s | (self.max_id, v.clone()));
                 }
                 TableAnyValue::UintValue(v) => {
-                    let id = self.col_name.get(&name).unwrap().clone();
-                    let mut s = self.uint_store.select(id).unwrap();
-                    s = s | (self.max_id, v.clone());
-                    self.uint_store <<= Store::new() | (id, s);
+                    self.uint_store <<= self.col_name.clone()
+                        & op_where(|s| &s == &name)
+                        & self.uint_store.clone()
+                        << op_set(|s| s | (self.max_id, v.clone()));
                 }
                 TableAnyValue::FloatValue(v) => {
-                    let id = self.col_name.get(&name).unwrap().clone();
-                    let mut s = self.float_store.select(id).unwrap();
-                    s = s | (self.max_id, v.clone());
-                    self.float_store <<= Store::new() | (id, s);
+                    self.float_store <<= self.col_name.clone()
+                        & op_where(|s| &s == &name)
+                        & self.float_store.clone()
+                        << op_set(|s| s | (self.max_id, v.clone()));
                 }
                 TableAnyValue::StringValue(v) => {
-                    let id = self.col_name.get(&name).unwrap().clone();
-                    let mut s = self.str_store.select(id).unwrap();
-                    s = s | (self.max_id, v.clone());
-                    self.str_store <<= Store::new() | (id, s);
+                    self.str_store <<= self.col_name.clone()
+                        & op_where(|s| &s == &name)
+                        & self.str_store.clone()
+                        << op_set(|s| s | (self.max_id, v.clone()));
                 }
             };
         }
     }
 }
+
+impl BitOr<Store<(String, TableAnyValue)>> for Table {
+    type Output = Table;
+    fn bitor(self, rhs: Store<(String, TableAnyValue)>) -> Self::Output {
+        let mut res = self.clone();
+        res |= rhs;
+        res
+    }
+}
+
 impl BitOr<i64> for Store<TableAnyValue> {
     type Output = Store<TableAnyValue>;
     fn bitor(self, rhs: i64) -> Self::Output {
@@ -509,31 +575,73 @@ impl BitOr<&str> for Store<TableAnyValue> {
     }
 }
 
-impl ShlAssign<Store<TableAnyValue>> for Table {
-    fn shl_assign(&mut self, rhs: Store<TableAnyValue>) {
+impl BitOrAssign<Store<TableAnyValue>> for Table {
+    fn bitor_assign(&mut self, rhs: Store<TableAnyValue>) {
         self.max_id = self.max_id + 1;
         for id in rhs.get_ids() {
             let value = rhs.select(id).unwrap();
             match value {
                 TableAnyValue::IntValue(v) => {
-                    let mut s = self.int_store.select(id).unwrap();
+                    let mut s = self.int_store.select(id).unwrap().clone();
                     s = s | (self.max_id, v.clone());
                     self.int_store <<= Store::new() | (id, s);
                 }
                 TableAnyValue::UintValue(v) => {
-                    let mut s = self.uint_store.select(id).unwrap();
+                    let mut s = self.uint_store.select(id).unwrap().clone();
                     s = s | (self.max_id, v.clone());
                     self.uint_store <<= Store::new() | (id, s);
                 }
                 TableAnyValue::FloatValue(v) => {
-                    let mut s = self.float_store.select(id).unwrap();
+                    let mut s = self.float_store.select(id).unwrap().clone();
                     s = s | (self.max_id, v.clone());
                     self.float_store <<= Store::new() | (id, s);
                 }
                 TableAnyValue::StringValue(v) => {
-                    let mut s = self.str_store.select(id).unwrap();
+                    let mut s = self.str_store.select(id).unwrap().clone();
                     s = s | (self.max_id, v.clone());
                     self.str_store <<= Store::new() | (id, s);
+                }
+            };
+        }
+    }
+}
+
+impl BitOr<Store<TableAnyValue>> for Table {
+    type Output = Table;
+    fn bitor(self, rhs: Store<TableAnyValue>) -> Self::Output {
+        let mut res = self.clone();
+        res |= rhs;
+        res
+    }
+}
+
+impl ShlAssign<Store<Store<TableAnyValue>>> for Table {
+    fn shl_assign(&mut self, rhs: Store<Store<TableAnyValue>>) {
+        for id in rhs.get_ids() {
+            let row = rhs.select(id).unwrap();
+            for sid in row.get_ids() {
+                let value = row.select(sid).unwrap();
+                match value {
+                    TableAnyValue::IntValue(v) => {
+                        let mut s = self.int_store.select(sid).unwrap().clone();
+                        s <<= store() | (id, v.clone());
+                        self.int_store <<= Store::new() | (sid, s);
+                    }
+                    TableAnyValue::UintValue(v) => {
+                        let mut s = self.uint_store.select(sid).unwrap().clone();
+                        s <<= store() | (id, v.clone());
+                        self.uint_store <<= Store::new() | (sid, s);
+                    }
+                    TableAnyValue::FloatValue(v) => {
+                        let mut s = self.float_store.select(sid).unwrap().clone();
+                        s <<= store() | (id, v.clone());
+                        self.float_store <<= Store::new() | (sid, s);
+                    }
+                    TableAnyValue::StringValue(v) => {
+                        let mut s = self.str_store.select(sid).unwrap().clone();
+                        s <<= store() | (id, v.clone());
+                        self.str_store <<= Store::new() | (sid, s);
+                    }
                 }
             };
         }

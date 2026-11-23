@@ -1,5 +1,6 @@
 mod store;
 mod table;
+mod db;
 
 pub use store::op_set;
 pub use store::op_fn;
@@ -11,6 +12,7 @@ pub use store::store;
 pub use store::Store;
 pub use store::StoreError;
 pub use table::*;
+pub use db::*;
 
 #[cfg(test)]
 mod tests;

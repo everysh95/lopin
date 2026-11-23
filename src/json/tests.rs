@@ -38,18 +38,18 @@ fn it_works_03() {
 
 #[test]
 fn it_works_04() {
-    let mut t = table() | col_int("test") | col_float("test2") | col_str("test3");
-    t <<= store() | 123i64 | 4.56f64 | "test7";
-    t <<= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
+    let mut t = table("test") | col_int("test") | col_float("test2") | col_str("test3");
+    t |= store() | 123i64 | 4.56f64 | "test7";
+    t |= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
     let _ss = t >> json_save("./testdoc/test3.json");
-    let _t2 = table() << json_load("./testdoc/test3.json");
+    let _t2 = table("test") << json_load("./testdoc/test3.json");
 }
 
 #[test]
 fn it_works_05() {
-    let mut t = table() | col_int("test") | col_float("test2") | col_str("test3");
-    t <<= store() | 123i64 | 4.56f64 | "test7";
-    t <<= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
+    let mut t = table("test") | col_int("test") | col_float("test2") | col_str("test3");
+    t |= store() | 123i64 | 4.56f64 | "test7";
+    t |= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
     let _ = (t.clone() & int_store()) >> json_save("./testdoc/test3_int.json");
     let _ = (t.clone() & uint_store()) >> json_save("./testdoc/test3_uint.json");
     let _ = (t.clone() & float_store()) >> json_save("./testdoc/test3_float.json");
@@ -60,13 +60,13 @@ fn it_works_05() {
     let sf : Store<Store<f64>> = store() << json_load("./testdoc/test3_float.json");
     let ss : Store<Store<String>> = store() << json_load("./testdoc/test3_str.json");
     let sn : Store<String> = store() << json_load("./testdoc/test3_names.json");
-    let _t2 = table() | si | su | sf | ss | sn;
+    let _t2 = table("test") | si | su | sf | ss | sn;
 }
 
 #[test]
 fn it_works_06() {
-    let mut t = table() | col_int("test") | col_float("test2") | col_str("test3");
-    t <<= store() | 123i64 | 4.56f64 | "test7";
-    t <<= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
+    let mut t = table("test") | col_int("test") | col_float("test2") | col_str("test3");
+    t |= store() | 123i64 | 4.56f64 | "test7";
+    t |= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
     let _ = t >> json_save_dir("./testdoc/test06");
 }
