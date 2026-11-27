@@ -1,9 +1,9 @@
-use std::{fs::{File, create_dir_all}, io::{Read, Write}, ops::{Shl, Shr}, sync::Arc};
+use std::{fs::{File, create_dir_all, read_dir}, io::{Read, Write}, ops::{Shl, ShlAssign, Shr}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Store, Table, TableAnyValue::{self, FloatValue, IntValue, StringValue, UintValue}, col_names, float_store, int_store, json::{OpJsonLoad, OpJsonSave, json_save}, op_fn, str_store, table, uint_store,
+    Store, Table, TableAnyValue::{self, FloatValue, IntValue, StringValue, UintValue}, col_names, float_store, int_store, json::{OpJsonLoad, OpJsonSave, json_load, json_save}, op_fn, store, str_store, table, uint_store,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -128,5 +128,61 @@ impl Shr<OpJsonSaveDir> for Table {
             }
         }
         self
+    }
+}
+
+pub struct OpJsonLoadDir {
+    path: String
+}
+
+pub fn json_load_dir(path: &str) -> OpJsonLoadDir {
+    OpJsonLoadDir { path: path.to_string() }
+}
+
+impl ShlAssign<OpJsonLoadDir> for Table {
+    fn shl_assign(&mut self, rhs: OpJsonLoadDir) {
+        if let Ok(dir) = read_dir(rhs.path) {
+            for rde in dir {
+                if let Ok(de) = rde{
+                    let path = de.path();
+                    if path.is_file() {
+                        let file_name = path.file_stem().unwrap().to_str().unwrap();
+                        if file_name.starts_with("i") {
+                            let sid : usize = file_name.split_at(2).1.parse().unwrap();
+                            let saved_store: Store<i64> = store() << json_load(path.to_str().unwrap());
+                            *self = self.clone() | (store() | (sid,saved_store));
+                        }
+                        if file_name.starts_with("u") {
+                            let sid : usize = file_name.split_at(2).1.parse().unwrap();
+                            let saved_store: Store<u64> = store() << json_load(path.to_str().unwrap());
+                            *self = self.clone() | (store() | (sid,saved_store));
+                        }
+                        if file_name.starts_with("f") {
+                            let sid : usize = file_name.split_at(2).1.parse().unwrap();
+                            let saved_store: Store<f64> = store() << json_load(path.to_str().unwrap());
+                            *self = self.clone() | (store() | (sid,saved_store));
+                        }
+                        if file_name.starts_with("s") {
+                            let sid : usize = file_name.split_at(2).1.parse().unwrap();
+                            let saved_store: Store<String> = store() << json_load(path.to_str().unwrap());
+                            *self = self.clone() | (store() | (sid,saved_store));
+                        }
+                        if file_name.starts_with("names") {
+                            let saved_store: Store<String> = store() << json_load(path.to_str().unwrap());
+                            *self = self.clone() | saved_store;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Shl<OpJsonLoadDir> for Table {
+    type Output = Table;
+    fn shl(self, rhs: OpJsonLoadDir) -> Self::Output {
+        let mut res = self.clone();
+        res <<= rhs;
+        res
     }
 }

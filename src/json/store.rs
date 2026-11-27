@@ -84,7 +84,13 @@ impl<T: Clone + DeserializeOwned> Shl<OpJsonLoad> for Store<T>{
             let _ = file.read_to_string(&mut text);
             let ps : Result<Store<T>,_> = serde_json::from_str(&text);
             return match ps {
-                Ok(s) => self << s,
+                Ok(s) => {
+                    let mut res = self;
+                    for (i,v) in s.get_ids().iter().cloned().zip(s.get_values()) {
+                        res = res | (i,v);
+                    }
+                    res
+                },
                 Err(_) => self
             };
         }

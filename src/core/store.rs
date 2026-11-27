@@ -1,29 +1,8 @@
-use std::{ops::{BitAnd, BitOr, Not, Shl, ShlAssign, Shr }, sync::Arc};
-
-#[derive(Debug, Clone)]
-pub struct StoreItem<ValueType: Clone> {
-    id: usize,
-    value: ValueType,
-}
-
-impl<ValueType: Clone> StoreItem<ValueType> {
-    pub fn create(id: usize, value: &ValueType) -> StoreItem<ValueType> {
-        StoreItem {
-            id,
-            value: value.clone(),
-        }
-    }
-    pub fn get_id(self: &Self) -> usize {
-        self.id
-    }
-    pub fn get_value(self: &Self) -> ValueType {
-        self.value.clone()
-    }
-}
+use std::{ops::{BitAnd, BitOr, BitOrAssign, Not, Shl, ShlAssign, Shr }, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct Store<ValueType: Clone> {
-    values: Vec<StoreItem<ValueType>>,
+    values: Vec<(usize,ValueType)>,
     max_id: usize,
 }
 
@@ -81,47 +60,27 @@ impl<ValueType: Clone> Store<ValueType> {
             values: vec![],
         }
     }
-    pub fn insert(self: &mut Self, id: usize, value: &ValueType) -> Result<usize, StoreError> {
-        if self.values.iter().all(|v| v.get_id() != id.clone()) {
-            self.values.push(StoreItem::create(id, value));
-            if self.max_id < id.clone() {
-                self.max_id = id.clone();
-            }
-            Ok(id)
-        } else {
-            Err(StoreError::DuplicateInsert)
-        }
-    }
-    pub fn insert_next(self: &mut Self, value: &ValueType) -> usize {
-        self.max_id = self.max_id + 1;
-        self.values.push(StoreItem::create(self.max_id, value));
-        self.max_id
-    }
-    pub fn update(self: &mut Self, value: &ValueType, id: usize) {
-        let pos = self.values.iter().position(|v| v.get_id() == id);
-        if let Some(pos) = pos {
-            self.values[pos] = StoreItem::create(id, value);
-        }
-    }
-    pub fn delete(self: &mut Self, id: usize) {
-        let pos = self.values.iter().position(|v| v.get_id() == id);
-        if let Some(pos) = pos {
-            self.values.remove(pos);
-        }
-    }
     pub fn select(self: &Self, id: usize) -> Option<ValueType> {
-        let pos = self.values.iter().position(|v| v.get_id() == id);
+        let pos = self.values.iter().position(|(rid,_)| *rid == id);
         if let Some(pos) = pos {
-            Some(self.values[pos].get_value())
+            Some(self.values[pos].1.clone())
         } else {
             None
         }
     }
+    pub fn insert(self: &mut Self, id: usize, value: ValueType) {
+        if self.get_ids().iter().all(|i| *i != id) {
+            self.values.push((id, value));
+            if self.max_id < id.clone() {
+                self.max_id = id.clone();
+            }
+        }
+    }
     pub fn get_ids(self: &Self) -> Vec<usize> {
-        self.values.iter().map(|v| v.get_id()).collect()
+        self.values.iter().map(|(rid,_)| *rid).collect()
     }
     pub fn get_values(self: &Self) -> Vec<ValueType> {
-        self.values.iter().map(|v| v.get_value()).collect()
+        self.values.iter().map(|(_,v)| v.clone()).collect()
     }
     pub fn get_max_id(self: &Self) -> usize {
         self.max_id
@@ -131,15 +90,16 @@ impl<ValueType: Clone> Store<ValueType> {
 impl Store<usize> {
     pub fn revase(self: &Self) -> Store<usize> {
         let max_id = self
-            .values
+            .get_values()
             .iter()
-            .map(|v| v.get_value())
+            .cloned()
             .reduce(|p, v| if p < v { v } else { p })
             .unwrap_or_default();
-        let values: Vec<StoreItem<usize>> = self
-            .values
+        let values: Vec<(usize, usize)> = self
+            .get_values()
             .iter()
-            .map(|v| StoreItem::create(v.get_value(), &v.get_id()))
+            .zip(self.get_ids())
+            .map(|(v,i)| (*v,i))
             .collect();
         Store { max_id, values }
     }
@@ -156,10 +116,10 @@ impl<LVT: Clone, RVT: Clone> BitAnd<Store<RVT>> for Store<LVT> {
     type Output = IDList;
     fn bitand(self, rhs: Store<RVT>) -> Self::Output {
         let ids: Vec<_> = self
-            .values
+            .get_ids()
             .iter()
-            .filter(|lv| rhs.values.iter().any(|i| i.get_id() == lv.get_id()))
-            .map(|lv| lv.get_id())
+            .cloned()
+            .filter(|lv| rhs.get_ids().iter().any(|i| i == lv ))
             .collect();
         IDList { ids }
     }
@@ -169,10 +129,12 @@ impl<LVT: Clone,F:Fn(LVT) -> bool> BitAnd<Arc<F>> for Store<LVT> {
     type Output = IDList;
     fn bitand(self, rhs: Arc<F>) -> Self::Output {
         let ids = self
-            .values
+            .get_ids()
             .iter()
-            .filter(|lv| rhs(lv.get_value()))
-            .map(|lv| lv.get_id())
+            .cloned()
+            .zip(self.get_values())
+            .filter(|(_,lv)| rhs(lv.clone()))
+            .map(|(li,_)| li)
             .collect();
         IDList { ids }
     }
@@ -183,10 +145,11 @@ impl<LVT: Clone> BitAnd<IDList> for Store<LVT> {
     fn bitand(self, rhs: IDList) -> Self::Output {
         let max_id = self.max_id;
         let values = self
-            .values
+            .get_ids()
             .iter()
-            .filter(|lv| rhs.ids.iter().any(|i| *i == lv.get_id()))
             .cloned()
+            .zip(self.get_values())
+            .filter(|(rid,_)| rhs.ids.iter().any(|i| *i == *rid))
             .collect();
         Store { max_id, values }
     }
@@ -217,8 +180,8 @@ impl<RVT: Clone> BitAnd<Store<RVT>> for OpValues {
 impl<LVT: Clone, RVT: Clone> BitOr<Store<RVT>> for Store<LVT> {
     type Output = IDList;
     fn bitor(self, rhs: Store<RVT>) -> Self::Output {
-        let mut ids: Vec<_> = self.values.iter().map(|lv| lv.get_id()).collect();
-        let mut ids2: Vec<_> = rhs.values.iter().map(|lv| lv.get_id()).collect();
+        let mut ids: Vec<_> = self.get_ids();
+        let mut ids2: Vec<_> = rhs.get_ids();
         ids.append(&mut ids2);
         IDList { ids }
     }
@@ -234,23 +197,79 @@ impl BitOr<IDList> for IDList {
     }
 }
 
+impl<LVT: Clone> BitOrAssign<(usize,LVT)> for Store<LVT> {
+    fn bitor_assign(&mut self, rhs: (usize,LVT)) {
+        let (id,value) = rhs;
+        self.insert(id, value);
+    }
+}
+
 impl<LVT: Clone> BitOr<(usize,LVT)> for Store<LVT> {
     type Output = Store<LVT>;
     fn bitor(self, rhs: (usize,LVT)) -> Self::Output {
         let mut result = self.clone();
-        let (id,value) = rhs;
-        let _ = result.insert(id, &value);
+        result |= rhs;
         result
+    }
+}
+
+
+impl<LVT: Clone> BitOrAssign<Option<LVT>> for Store<LVT> {
+    fn bitor_assign(&mut self, rhs: Option<LVT>) {
+        if let Some(rhs) = rhs {
+            *self |= (self.get_max_id() + 1, rhs);
+        }
     }
 }
 
 impl<LVT: Clone> BitOr<Option<LVT>> for Store<LVT> {
     type Output = Store<LVT>;
     fn bitor(self, rhs: Option<LVT>) -> Self::Output {
-        match rhs {
-            Some(rhs) => self.clone() | (self.max_id + 1, rhs),
-            None => self
-        }
+        let mut result = self.clone();
+        result |= rhs;
+        result
+    }
+}
+
+
+impl<LVT: Clone> ShlAssign<Arc<dyn Fn(LVT) -> LVT>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Arc<dyn Fn(LVT) -> LVT>) {
+        self.values = self
+            .get_ids()
+            .iter()
+            .cloned()
+            .zip(self.get_values())
+            .map(|(id,value)| (id, rhs(value)))
+            .collect();
+    }
+}
+
+impl<LVT: Clone,F: Fn(LVT) -> LVT> ShlAssign<Arc<F>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Arc<F>) {
+        self.values = self
+            .get_ids()
+            .iter()
+            .cloned()
+            .zip(self.get_values())
+            .map(|(id,value)| (id, rhs(value)))
+            .collect();
+    }
+}
+
+impl<LVT: Clone> ShlAssign<Store<LVT>> for Store<LVT> {
+    fn shl_assign(&mut self, rhs: Store<LVT>) {
+        self.values = self.get_ids()
+            .iter()
+            .cloned()
+            .zip(self.get_values())
+            .map(|(ri,rv)| {
+                if let Some(v) = rhs.select(ri) {
+                    (ri,v)
+                } else {
+                    (ri,rv)
+                }
+            })
+            .collect();
     }
 }
 
@@ -259,9 +278,11 @@ impl<LVT: Clone,RVT: Clone> Shl<Arc<dyn Fn(LVT) -> RVT>> for Store<LVT> {
     fn shl(self, rhs: Arc<dyn Fn(LVT) -> RVT>) -> Self::Output {
         let max_id = self.max_id;
         let values = self
-            .values
+            .get_ids()
             .iter()
-            .map(|lv| StoreItem::create(lv.get_id(), &(rhs(lv.get_value()))))
+            .cloned()
+            .zip(self.get_values())
+            .map(|(id,value)| (id, rhs(value)))
             .collect();
         Store { max_id, values }
     }
@@ -272,56 +293,28 @@ impl<LVT: Clone,RVT: Clone, F : Fn(LVT) -> RVT> Shl<Arc<F>> for Store<LVT> {
     fn shl(self, rhs: Arc<F>) -> Self::Output {
         let max_id = self.max_id;
         let values = self
-            .values
+            .get_ids()
             .iter()
-            .map(|lv| StoreItem::create(lv.get_id(), &(rhs(lv.get_value()))))
+            .cloned()
+            .zip(self.get_values())
+            .map(|(id,value)| (id, rhs(value)))
             .collect();
         Store { max_id, values }
+    }
+}
+
+impl<LVT: Clone> Shl<Store<LVT>> for Store<LVT> {
+    type Output = Store<LVT>;
+    fn shl(self, rhs: Store<LVT>) -> Self::Output {
+        let mut res = self;
+        res <<= rhs;
+        res
     }
 }
 
 impl<LVT: Clone> Shr<Store<LVT>> for Store<LVT> {
     type Output = Store<LVT>;
     fn shr(self, rhs: Store<LVT>) -> Self::Output {
-        let max_id = rhs.max_id;
-        let values = rhs
-            .values
-            .iter()
-            .map(|rv| {
-                let v = self.select(rv.get_id()).unwrap_or(rv.get_value());
-                StoreItem::create(rv.get_id(), &v)
-            })
-            .collect();
-        Store { max_id, values }
-    }
-}
-impl<LVT: Clone> Shl<Store<LVT>> for Store<LVT> {
-    type Output = Store<LVT>;
-    fn shl(self, rhs: Store<LVT>) -> Self::Output {
-        rhs >> self
-    }
-}
-
-impl<LVT: Clone> ShlAssign<Arc<dyn Fn(LVT) -> LVT>> for Store<LVT> {
-    fn shl_assign(&mut self, rhs: Arc<dyn Fn(LVT) -> LVT>) {
-        let res = self.clone() << rhs;
-        self.max_id = res.max_id;
-        self.values = res.values;
-    }
-}
-
-impl<LVT: Clone,F: Fn(LVT) -> LVT> ShlAssign<Arc<F>> for Store<LVT> {
-    fn shl_assign(&mut self, rhs: Arc<F>) {
-        let res = self.clone() << rhs;
-        self.max_id = res.max_id;
-        self.values = res.values;
-    }
-}
-
-impl<LVT: Clone> ShlAssign<Store<LVT>> for Store<LVT> {
-    fn shl_assign(&mut self, rhs: Store<LVT>) {
-        let res :Store<LVT> = rhs >> self.clone();
-        self.max_id = res.max_id;
-        self.values = res.values;
+        rhs << self        
     }
 }

@@ -2,7 +2,9 @@
 use std::assert_eq;
 
 
-use crate::json::{json_load, json_save, table::json_save_dir};
+use serde_json::to_string;
+
+use crate::json::{json_load, json_save, table::{json_load_dir, json_save_dir}};
 
 // use super::*;
 use super::super::*;
@@ -68,5 +70,7 @@ fn it_works_06() {
     let mut t = table("test") | col_int("test") | col_float("test2") | col_str("test3");
     t |= store() | 123i64 | 4.56f64 | "test7";
     t |= store() | ("test2",12.3f64) | ("test3","test7") | ("test",456i64);
-    let _ = t >> json_save_dir("./testdoc/test06");
+    let _ = t.clone() >> json_save_dir("./testdoc/test06");
+    let t2 = table("test")  << json_load_dir("./testdoc/test06");
+    assert_eq!(to_string(&t).unwrap(),to_string(&t2).unwrap());
 }

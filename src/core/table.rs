@@ -2,11 +2,8 @@ use std::
     ops::{BitAnd, BitOr, BitOrAssign, ShlAssign, }
 ;
 
-
-use serde::de::value;
-
 use crate::{
-    Store, TableAnyValue::{FloatValue, IntValue, StringValue, UintValue}, op_fn, op_set, op_where, store,
+    Store, TableAnyValue::{FloatValue, IntValue, StringValue, UintValue}, op_set, op_where, store,
 };
 
 #[derive(Debug, Clone)]
@@ -382,7 +379,7 @@ impl BitOr<Store<Store<String>>> for Table {
 impl BitOr<Store<String>> for Table {
     type Output = Table;
     fn bitor(self, rhs: Store<String>) -> Self::Output {
-        let mut res = self.clone();
+        let mut res = self;
         res.max_sid = if res.max_sid < rhs.get_max_id() {
             rhs.get_max_id()
         } else {
@@ -399,8 +396,8 @@ impl BitOr<(String, Store<i64>)> for Table {
     type Output = Table;
     fn bitor(self, rhs: (String, Store<i64>)) -> Self::Output {
         let (name, store) = rhs;
-        let mut result = self.clone();
-        result.max_sid = self.max_sid + 1;
+        let mut result = self;
+        result.max_sid = result.max_sid + 1;
         result.col_name = result.col_name | (result.max_sid, name);
         result.int_store = result.int_store | (result.max_sid, store);
         result
@@ -411,8 +408,8 @@ impl BitOr<(String, Store<u64>)> for Table {
     type Output = Table;
     fn bitor(self, rhs: (String, Store<u64>)) -> Self::Output {
         let (name, store) = rhs;
-        let mut result = self.clone();
-        result.max_sid = self.max_sid + 1;
+        let mut result = self;
+        result.max_sid = result.max_sid + 1;
         result.col_name = result.col_name | (result.max_sid, name);
         result.uint_store = result.uint_store | (result.max_sid, store);
         result
@@ -423,8 +420,8 @@ impl BitOr<(String, Store<f64>)> for Table {
     type Output = Table;
     fn bitor(self, rhs: (String, Store<f64>)) -> Self::Output {
         let (name, store) = rhs;
-        let mut result = self.clone();
-        result.max_sid = self.max_sid + 1;
+        let mut result = self;
+        result.max_sid = result.max_sid + 1;
         result.col_name = result.col_name | (result.max_sid, name);
         result.float_store = result.float_store | (result.max_sid, store);
         result
@@ -435,8 +432,8 @@ impl BitOr<(String, Store<String>)> for Table {
     type Output = Table;
     fn bitor(self, rhs: (String, Store<String>)) -> Self::Output {
         let (name, store) = rhs;
-        let mut result = self.clone();
-        result.max_sid = self.max_sid + 1;
+        let mut result = self;
+        result.max_sid = result.max_sid + 1;
         result.col_name = result.col_name | (result.max_sid, name);
         result.str_store = result.str_store | (result.max_sid, store);
         result
@@ -542,7 +539,7 @@ impl BitOrAssign<Store<(String, TableAnyValue)>> for Table {
 impl BitOr<Store<(String, TableAnyValue)>> for Table {
     type Output = Table;
     fn bitor(self, rhs: Store<(String, TableAnyValue)>) -> Self::Output {
-        let mut res = self.clone();
+        let mut res = self;
         res |= rhs;
         res
     }
@@ -609,7 +606,7 @@ impl BitOrAssign<Store<TableAnyValue>> for Table {
 impl BitOr<Store<TableAnyValue>> for Table {
     type Output = Table;
     fn bitor(self, rhs: Store<TableAnyValue>) -> Self::Output {
-        let mut res = self.clone();
+        let mut res = self;
         res |= rhs;
         res
     }
